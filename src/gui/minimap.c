@@ -75,43 +75,53 @@ static void map_save(void);
 static int map_load(void);
 
 void minimap_update(void) {
-    int x,y,xs,xe,ox,oy;
+    if (game_options & GO_NOMAP)
+        return;
 
-    if (game_options&GO_NOMAP) return;
+    int ox = originx - DIST;
+    int oy = originy - DIST;
+    rewrite_cnt = 0;
 
-    ox=originx-DIST;
-    oy=originy-DIST;
+    for (int y = 1; y < DIST * 2; y++) {
+        if (y + oy < 0 || y + oy >= MAXMAP)
+            continue;
 
-    rewrite_cnt=0;
-    for (y=1; y<DIST*2; y++) {
-        if (y+oy<0) continue;
-        if (y+oy>=MAXMAP) continue;
+        int xs = (y < DIST) ? DIST - y : y - DIST;
+        int xe = (y < DIST) ? DIST + y : DIST * 3 - y;
 
-		if (y<DIST) { xs=DIST-y; xe=DIST+y; }
-		else { xs=y-DIST; xe=DIST*3-y; }
+        for (int x = xs + 1; x < xe; x++) {
+            if (x + ox < 0 || x + ox >= MAXMAP)
+                continue;
 
-		for (x=xs+1; x<xe; x++) {
-            if (x+ox<0) continue;
-            if (x+ox>=MAXMAP) continue;
-            if (!(map[x+y*MAPDX].flags&CMF_VISIBLE)) continue;
+            int idx = x + y * MAPDX;
+            if (!(map[idx].flags & CMF_VISIBLE))
+                continue;
 
+            int color;
+            if (map[idx].mmf & MMF_SIGHTBLOCK) {
+                color = (map[idx].flags & CMF_USE) ? 5 : 1;
+            } else if (map[idx].fsprite) {
+                color = 2;
+            } else if (map[idx].csprite && idx != plrmn) {
+                color = 3;
+            } else {
+                color = 4;
+            }
 
-            if (map[x+y*MAPDX].mmf&MMF_SIGHTBLOCK) {
-                if (map[x+y*MAPDX].flags&CMF_USE) set_pix(ox+x,oy+y,5);
-                else set_pix(ox+x,oy+y,1);
-            } else if (map[x+y*MAPDX].fsprite) set_pix(ox+x,oy+y,2);
-            else if (map[x+y*MAPDX].csprite && x+y*MAPDX!=plrmn) set_pix(ox+x,oy+y,3);
-            else set_pix(ox+x,oy+y,4);
+            set_pix(ox + x, oy + y, color);
         }
     }
-    if (rewrite_cnt>4) {
-        memset(_mmap,0,sizeof(_mmap));
-        update1=update2=1;
-        note("MAP CHANGED: %d",rewrite_cnt);
+
+    if (rewrite_cnt > 4) {
+        memset(_mmap, 0, sizeof(_mmap));
+        update1 = update2 = 1;
+        note("MAP CHANGED: %d", rewrite_cnt);
     }
-    if (mapnr==-1 && update3) {
-        update3=0;
-        if (game_options&GO_MAPSAVE) mapnr=map_load();
+
+    if (mapnr == -1 && update3) {
+        update3 = 0;
+        if (game_options & GO_MAPSAVE)
+            mapnr = map_load();
     }
 }
 

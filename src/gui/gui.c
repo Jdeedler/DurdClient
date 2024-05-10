@@ -555,67 +555,66 @@ void display_wheel(void) {
 }
 
 static void display(void) {
-    extern int memptrs[MAX_MEM];
-    extern int memsize[MAX_MEM];
-    extern int memused;
-    extern int memptrused;
-    extern long long sdl_time_make,sdl_time_tex,sdl_time_tex_main,sdl_time_text,sdl_time_blit;
-    int t,tmp;
-    long long start=SDL_GetTicks64();
+    extern int memptrs[MAX_MEM], memsize[MAX_MEM], memused, memptrused;
+    extern long long sdl_time_make, sdl_time_tex, sdl_time_tex_main, sdl_time_text, sdl_time_blit;
+    long long start = SDL_GetTicks64();
 
-#if 0
-    // Performance for stuff happening during the actual tick only.
-    // So zero them now after preload is done.
-    sdl_time_make=0;
-    sdl_time_tex=0;
-    sdl_time_text=0;
-    sdl_time_blit=0;
-#endif
-
-    if ((tmp=sdl_check_mouse())) {
-        mousex=-1;
-        if (tmp==-1) mousey=0;
-        else mousey=YRES/2;
+    int tmp = sdl_check_mouse();
+    if (tmp) {
+        mousex = -1;
+        mousey = (tmp == -1) ? 0 : YRES / 2;
     }
 
     display_toplogic();
     if (game_slowdown) {
-        display_toplogic();
-        display_toplogic();
-        display_toplogic();
+        for (int i = 0; i < 3; i++) {
+            display_toplogic();
+        }
     }
     set_cmd_states();
 
-    if (sockstate<4 && ((t=time(NULL)-socktimeout)>10 || !originx)) {
-        dd_rect(0,0,800,540,blackcolor);
+    int t = time(NULL) - socktimeout;
+    if (sockstate < 4 && (t > 10 || !originx)) {
+        dd_rect(0, 0, 800, 540, blackcolor);
         display_screen();
         display_text();
-        if ((now/1000)&1) dd_drawtext(800/2,540/2-60,redcolor,DD_CENTER|DD_LARGE,"not connected");
-        dd_copysprite(60,800/2,(540-240)/2,DDFX_NLIGHT,DD_CENTER);
+        if ((now / 1000) & 1) {
+            dd_drawtext(800 / 2, 540 / 2 - 60, redcolor, DD_CENTER | DD_LARGE, "not connected");
+        }
+        dd_copysprite(60, 800 / 2, (540 - 240) / 2, DDFX_NLIGHT, DD_CENTER);
         if (!kicked_out) {
-            dd_drawtext_fmt(800/2,540/2-40,textcolor,DD_SMALL|DD_CENTER|DD_FRAME,"Trying to establish connection. %d seconds...",t);
-            if (t>15) {
-                dd_drawtext_fmt(800/2,540/2-0,textcolor,DD_LARGE|DD_CENTER|DD_FRAME,"Please check %s for troubleshooting advice.",game_url);
+            dd_drawtext_fmt(800 / 2, 540 / 2 - 40, textcolor, DD_SMALL | DD_CENTER | DD_FRAME,
+                            "Trying to establish connection. %d seconds...", t);
+            if (t > 15) {
+                dd_drawtext_fmt(800 / 2, 540 / 2 - 0, textcolor, DD_LARGE | DD_CENTER | DD_FRAME,
+                                "Please check %s for troubleshooting advice.", game_url);
             }
         }
         return;
     }
 
     dd_push_clip();
-    dd_more_clip(dotx(DOT_MTL),doty(DOT_MTL),dotx(DOT_MBR),doty(DOT_MBR));
+    dd_more_clip(dotx(DOT_MTL), doty(DOT_MTL), dotx(DOT_MBR), doty(DOT_MBR));
     display_game();
     dd_pop_clip();
 
     display_screen();
 
     display_keys();
-    if (game_options&GO_WHEEL) display_wheel();
-    if (show_look) display_look();
+    if (game_options & GO_WHEEL) {
+        display_wheel();
+    }
+    if (show_look) {
+        display_look();
+    }
     display_wear();
     display_inventory();
     display_action();
-    if (con_cnt) display_container();
-    else display_skill();
+    if (con_cnt) {
+        display_container();
+    } else {
+        display_skill();
+    }
     display_scrollbars();
     display_text();
     display_gold();
@@ -631,202 +630,89 @@ static void display(void) {
     display_selfbars();
     display_minimap();
     display_citem();
-    context_display(mousex,mousey);
+    context_display(mousex, mousey);
     display_vnquest();
-    display_helpandquest(); // display last because it is on top
+    display_helpandquest();
 
-    int duration=SDL_GetTicks64()-start;
+    int duration = SDL_GetTicks64() - start;
 
-    if (display_vc) {
-        extern long long texc_miss,texc_pre; //mem_tex,
-        extern uint64_t sdl_backgnd_wait,sdl_backgnd_work,sdl_time_preload,sdl_time_load,gui_time_network;
-        extern uint64_t gui_frametime,gui_ticktime;
-        extern uint64_t sdl_time_pre1,sdl_time_pre2,sdl_time_pre3,sdl_time_mutex,sdl_time_alloc,sdl_time_make_main;
-        extern int x_offset,y_offset; //pre_2,pre_in,pre_3;
-        //static int dur=0,make=0,tex=0,text=0,blit=0,stay=0;
-        static int size;
-        static unsigned char dur_graph[100],size1_graph[100],size2_graph[100],size3_graph[100]; //,size_graph[100];load_graph[100],
-        static unsigned char pre1_graph[100],pre2_graph[100],pre3_graph[100];
-        //static int frame_min=99,frame_max=0,frame_step=0;
-        //static int tick_min=99,tick_max=0,tick_step=0;
-        int px=800-110,py=35+(!(game_options&GO_SMALLTOP) ? 0 : gui_topoff);
-        PROCESS_MEMORY_COUNTERS mi;
+if (display_vc) {
+    extern long long texc_miss, texc_pre;
+    extern uint64_t sdl_backgnd_wait, sdl_backgnd_work, sdl_time_preload, sdl_time_load, gui_time_network;
+    extern uint64_t gui_frametime, gui_ticktime;
+    extern uint64_t sdl_time_pre1, sdl_time_pre2, sdl_time_pre3, sdl_time_mutex, sdl_time_alloc, sdl_time_make_main;
+    extern int x_offset, y_offset;
+    static int size;
+    static unsigned char dur_graph[100], size1_graph[100], size2_graph[100], size3_graph[100];
+    static unsigned char pre1_graph[100], pre2_graph[100], pre3_graph[100];
+    int px = 800 - 110;
+    int py = 35 + (!(game_options & GO_SMALLTOP) ? 0 : gui_topoff);
+    PROCESS_MEMORY_COUNTERS mi;
 
-        GetProcessMemoryInfo(GetCurrentProcess(),&mi,sizeof(mi));
+    GetProcessMemoryInfo(GetCurrentProcess(), &mi, sizeof(mi));
+    dd_drawtext_fmt(px, py += 10, IRGB(8, 31, 8), DD_LEFT | DD_FRAME | DD_NOCACHE, "Mem: %5.2f MB", mi.WorkingSetSize / (1024.0 * 1024.0));
 
-        //dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"skip %3.0f%%",100.0*skip/tota);
-        //dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"idle %3.0f%%",100.0*idle/tota);
-        //dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME|DD_NOCACHE,"Tex: %5.2f MB",mem_tex/(1024.0*1024.0));
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME|DD_NOCACHE,"Mem: %5.2f MB",mi.WorkingSetSize/(1024.0*1024.0));
+    py += 10;
 
-#if 0
-        if (pre_in>=pre_3) size=pre_in-pre_3;
-        else size=16384+pre_in-pre_3;
+    size = duration + gui_time_network;
+    dd_drawtext(px, py += 10, IRGB(8, 31, 8), DD_LEFT | DD_FRAME, "Render");
+    sdl_bargraph_add(sizeof(dur_graph), dur_graph, size < 42 ? size : 42);
+    sdl_bargraph(px, py += 40, sizeof(dur_graph), dur_graph, x_offset, y_offset);
 
-        dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"PreC %d",size);
-#endif
-#if 0
-        extern int pre_in,pre_1,pre_2,pre_3;
-        extern int texc_used;
-        py+=10;
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME|DD_NOCACHE,"PreI %d",pre_in);
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME|DD_NOCACHE,"Pre1 %d",pre_1);
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME|DD_NOCACHE,"Pre2 %d",pre_2);
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME|DD_NOCACHE,"Pre3 %d",pre_3);
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME|DD_NOCACHE,"Used %d",texc_used);
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME|DD_NOCACHE,"Size %d",sdl_cache_size);
-#endif
-        //dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"Miss %lld",texc_miss);
-        //dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"Prel %lld",texc_pre);
+    size = gui_frametime / 2;
+    dd_drawtext_fmt(px, py += 10, IRGB(8, 31, 8), DD_NOCACHE | DD_LEFT | DD_FRAME, "Frametime %lld", gui_frametime);
+    sdl_bargraph_add(sizeof(pre2_graph), pre2_graph, size < 42 ? size : 42);
+    sdl_bargraph(px, py += 40, sizeof(pre2_graph), pre2_graph, x_offset, y_offset);
 
-        py+=10;
+    size = gui_ticktime / 2;
+    dd_drawtext_fmt(px, py += 10, IRGB(8, 31, 8), DD_NOCACHE | DD_LEFT | DD_FRAME, "Ticktime %lld", gui_ticktime);
+    sdl_bargraph_add(sizeof(pre3_graph), pre3_graph, size < 42 ? size : 42);
+    sdl_bargraph(px, py += 40, sizeof(pre3_graph), pre3_graph, x_offset, y_offset);
 
-        size=duration+gui_time_network;
-        dd_drawtext(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME,"Render");
-        sdl_bargraph_add(sizeof(dur_graph),dur_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(dur_graph),dur_graph,x_offset,y_offset);
+    size = (lasttick + q_size) * 2;
+    dd_drawtext_fmt(px, py += 10, IRGB(8, 31, 8), DD_FRAME | DD_LEFT, "Queue %d", size / 2);
+    sdl_bargraph_add(sizeof(pre2_graph), size3_graph, size < 42 ? size : 42);
+    sdl_bargraph(px, py += 40, sizeof(pre2_graph), size3_graph, x_offset, y_offset);
 
-#if 0
-        if (gui_frametime<frame_min) frame_min=gui_frametime;
-        if (gui_frametime>frame_max) frame_max=gui_frametime;
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_NOCACHE|DD_LEFT|DD_FRAME,"FT %d %d",frame_min,frame_max);
+    size = sdl_time_pre1 + sdl_time_pre3;
+    dd_drawtext(px, py += 10, IRGB(8, 31, 8), DD_LEFT | DD_FRAME, "Pre-Main");
+    sdl_bargraph_add(sizeof(size1_graph), size2_graph, size < 42 ? size : 42);
+    sdl_bargraph(px, py += 40, sizeof(size1_graph), size2_graph, x_offset, y_offset);
 
-        if (gui_ticktime<tick_min) tick_min=gui_ticktime;
-        if (gui_ticktime>tick_max) tick_max=gui_ticktime;
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_NOCACHE|DD_LEFT|DD_FRAME,"TT %d %d",tick_min,tick_max);
-#endif
-        size=gui_frametime/2;
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_NOCACHE|DD_LEFT|DD_FRAME,"Frametime %lld",gui_frametime);
-        sdl_bargraph_add(sizeof(pre2_graph),pre2_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(pre2_graph),pre2_graph,x_offset,y_offset);
+    if (sdl_multi) {
+        size = sdl_backgnd_work / sdl_multi;
+        dd_drawtext_fmt(px, py += 10, IRGB(8, 31, 8), DD_LEFT | DD_FRAME, "Pre-Back (%d)", sdl_multi);
+    } else {
+        size = sdl_time_pre2;
+        dd_drawtext_fmt(px, py += 10, IRGB(8, 31, 8), DD_LEFT | DD_FRAME, "Make");
+    }
+    sdl_bargraph_add(sizeof(pre1_graph), pre1_graph, size < 42 ? size : 42);
+    sdl_bargraph(px, py += 40, sizeof(pre1_graph), pre1_graph, x_offset, y_offset);
 
-        size=gui_ticktime/2;
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_NOCACHE|DD_LEFT|DD_FRAME,"Ticktime %lld",gui_ticktime);
-        sdl_bargraph_add(sizeof(pre3_graph),pre3_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(pre3_graph),pre3_graph,x_offset,y_offset);
-#if 0
-        size=gui_time_network;
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME,"Network");
-        sdl_bargraph_add(sizeof(pre2_graph),pre2_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(pre2_graph),pre2_graph,x_offset,y_offset);
+    sdl_time_preload = 0;
+    sdl_time_make = 0;
+    sdl_time_tex = 0;
+    sdl_time_text = 0;
+    sdl_time_blit = 0;
+    sdl_backgnd_work = 0;
+    sdl_backgnd_wait = 0;
+    sdl_time_load = 0;
+    sdl_time_pre1 = 0;
+    sdl_time_pre2 = 0;
+    sdl_time_pre3 = 0;
+    sdl_time_mutex = 0;
+    sdl_time_tex_main = 0;
+    gui_time_misc = 0;
+    sdl_time_alloc = 0;
+    texc_miss = 0;
+    texc_pre = 0;
+    sdl_time_make_main = 0;
+    gui_time_network = 0;
+}
 
-        size=sdl_time_pre1;
-        dd_drawtext(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME,"Alloc");
-        sdl_bargraph_add(sizeof(size1_graph),size3_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(size1_graph),size3_graph,x_offset,y_offset);
-#endif
-
-
-        size=(lasttick+q_size)*2;
-        dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_FRAME|DD_LEFT,"Queue %d",size/2);
-        sdl_bargraph_add(sizeof(pre2_graph),size3_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(pre2_graph),size3_graph,x_offset,y_offset);
-#if 0
-        size=sdl_time_alloc;
-        dd_drawtext(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME,"Alloc");
-        sdl_bargraph_add(sizeof(size1_graph),load_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(size1_graph),load_graph,x_offset,y_offset);
-#endif
-
-        size=sdl_time_pre1+sdl_time_pre3;
-        dd_drawtext(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME,"Pre-Main");
-        sdl_bargraph_add(sizeof(size1_graph),size2_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(size1_graph),size2_graph,x_offset,y_offset);
-#if 0
-
-#endif
-        if (sdl_multi) {
-            size=sdl_backgnd_work/sdl_multi;
-            dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME,"Pre-Back (%d)",sdl_multi);
-        } else {
-            size=sdl_time_pre2;
-            dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_LEFT|DD_FRAME,"Make");
-        }
-        sdl_bargraph_add(sizeof(pre1_graph),pre1_graph,size<42?size:42);
-        sdl_bargraph(px,py+=40,sizeof(pre1_graph),pre1_graph,x_offset,y_offset);
-#if 0
-            dd_drawtext_fmt(px,py+=10,IRGB(8,31,8),DD_SMALL|DD_LEFT|DD_FRAME,"Mutex");
-            sdl_bargraph_add(sizeof(pre2_graph),pre2_graph,sdl_time_mutex/sdl_multi<42?sdl_time_mutex/sdl_multi:42);
-            sdl_bargraph(px,py+=40,sizeof(pre2_graph),pre2_graph,x_offset,y_offset);
-#endif
-#if 0
-        dd_drawtext(px,py+=10,IRGB(8,31,8),DD_SMALL|DD_LEFT|DD_FRAME,"Pre-Queue Tot");
-        sdl_bargraph_add(sizeof(size_graph),size_graph,size/4<42?size/4:42);
-        sdl_bargraph(px,py+=40,sizeof(size_graph),size_graph,x_offset,y_offset);
-
-        dd_drawtext(px,py+=10,IRGB(8,31,8),DD_SMALL|DD_LEFT|DD_FRAME,"Pre2");
-        sdl_bargraph_add(sizeof(pre2_graph),pre2_graph,sdl_time_pre2<42?sdl_time_pre2:42);
-        sdl_bargraph(px,py+=40,sizeof(pre2_graph),pre2_graph,x_offset,y_offset);
-
-        dd_drawtext(px,py+=10,IRGB(8,31,8),DD_SMALL|DD_LEFT|DD_FRAME,"Texture");
-        sdl_bargraph_add(sizeof(pre3_graph),pre3_graph,sdl_time_pre3<42?sdl_time_pre3:42);
-        sdl_bargraph(px,py+=40,sizeof(pre3_graph),pre3_graph,x_offset,y_offset);
-
-#endif
-#if 0
-        if (pre_2>=pre_3) size=pre_2-pre_3;
-        else size=16384+pre_2-pre_3;
-
-        dd_drawtext(px,py+=10,IRGB(8,31,8),DD_SMALL|DD_LEFT|DD_FRAME,"Size Tex");
-        sdl_bargraph_add(sizeof(size3_graph),size3_graph,size/4<42?size/4:42);
-        sdl_bargraph(px,py+=40,sizeof(size3_graph),size3_graph,x_offset,y_offset);
-
-
-        if (duration>10 && (!stay || duration>dur)) {
-            dur=duration;
-            make=sdl_time_make;
-            tex=sdl_time_tex;
-            text=sdl_time_text;
-            blit=sdl_time_blit;
-            stay=24*6;
-        }
-
-        if (stay>0) {
-            stay--;
-            dd_drawtext_fmt(px,py+=20,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"Dur %dms (%.0f%%)",dur,100.0*(make+tex+text+blit)/dur);
-            dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"Make %dms (%.0f%%)",make,100.0*make/dur);
-            dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"Tex %dms (%.0f%%)",tex,100.0*tex/dur);
-            dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"Text %dms (%.0f%%)",text,100.0*text/dur);
-            dd_drawtext_fmt(px,py+=10,0xffff,DD_SMALL|DD_LEFT|DD_FRAME|DD_NOCACHE,"Blit %dms (%.0f%%)",blit,100.0*blit/dur);
-        }
-#endif
-        sdl_time_preload=0;
-        sdl_time_make=0;
-        sdl_time_tex=0;
-        sdl_time_text=0;
-        sdl_time_blit=0;
-        sdl_backgnd_work=0;
-        sdl_backgnd_wait=0;
-        sdl_time_load=0;
-        sdl_time_pre1=0;
-        sdl_time_pre2=0;
-        sdl_time_pre3=0;
-        sdl_time_mutex=0;
-        sdl_time_tex_main=0;
-        gui_time_misc=0;
-        sdl_time_alloc=0;
-        texc_miss=0;
-        texc_pre=0;
-        sdl_time_make_main=0;
-        gui_time_network=0;
-#if 0
-        if (SDL_GetTicks()-frame_step>1000) {
-            frame_step=SDL_GetTicks();
-            frame_min=99;
-            frame_max=0;
-        }
-        if (SDL_GetTicks()-tick_step>1000) {
-            tick_step=SDL_GetTicks();
-            tick_min=99;
-            tick_max=0;
-        }
-#endif
-    } //else dd_drawtext_fmt(650,15,0xffff,DD_SMALL|DD_FRAME,"Mirror %d",mirror);
-
-    sprintf(perf_text,"mem usage=%.2f/%.2fMB, %.2f/%.2fKBlocks",
-            memsize[0]/1024.0/1024.0,memused/1024.0/1024.0,
-            memptrs[0]/1024.0,memptrused/1024.0);
-
+    sprintf(perf_text, "mem usage=%.2f/%.2fMB, %.2f/%.2fKBlocks",
+            memsize[0] / 1024.0 / 1024.0, memused / 1024.0 / 1024.0,
+            memptrs[0] / 1024.0, memptrused / 1024.0);
 }
 
 // cmd
@@ -2230,43 +2116,46 @@ int calc_tick_delay_normal(int size) {
 
 int main_loop(void) {
     void prefetch_game(int attick);
-    int tmp,timediff,ltick=0,attick;
+    int tmp, timediff, ltick = 0, attick;
     long long start;
-    int do_one_tick=1;
-    uint64_t gui_last_frame=0,gui_last_tick=0;
+    int do_one_tick = 1;
+    uint64_t gui_last_frame = 0, gui_last_tick = 0;
+    const int FPS = 120;
+    const int FRAME_TIME = 1000 / FPS;
 
     amod_gamestart();
-
-    nexttick=SDL_GetTicks()+MPT;
-    nextframe=SDL_GetTicks()+MPF;
+    nexttick = SDL_GetTicks() + MPT;
+    nextframe = SDL_GetTicks() + FRAME_TIME;
 
     while (!quit) {
-        now=SDL_GetTicks();
+        now = SDL_GetTicks();
+        start = SDL_GetTicks64();
 
-        start=SDL_GetTicks64();
-        poll_network();
+        // Poll the network
+        if (poll_network() == -1) {
+            // Handle network error
+            break;
+        }
 
-        // synchronise frames and ticks if at the same speed
-        if (MPF==MPT) nextframe=nexttick;
+        // Check if we can go on
+        if (sockstate > 2) {
+            // Decode as many ticks as we can and add their contents to the prefetch queue
+            while ((attick = next_tick())) {
+                if (!(attick & 3) || !game_slowdown) {
+                    prefetch_game(attick);
+                }
+            }
 
-        // check if we can go on
-        if (sockstate>2) {
-
-            // decode as many ticks as we can
-            // and add their contents to the prefetch queue
-            while ((attick=next_tick()))
-                if (!(attick&3) || !game_slowdown) prefetch_game(attick);
-
-            // get one tick to display?
-            timediff=nexttick-SDL_GetTicks();
-            if (timediff<0 || nexttick<=nextframe) {  // do ticks when they are due, or before the corresponding frame is shown
-                do_one_tick=1;
-                gui_ticktime=SDL_GetTicks64()-gui_last_tick;
-                gui_last_tick=SDL_GetTicks64();
+            // Get one tick to display
+            timediff = nexttick - SDL_GetTicks();
+            if (timediff < 0 || nexttick <= nextframe) {
+                // Do ticks when they are due, or before the corresponding frame is shown
+                do_one_tick = 1;
+                gui_ticktime = SDL_GetTicks64() - gui_last_tick;
+                gui_last_tick = SDL_GetTicks64();
                 do_tick();
                 ltick++;
-
-                if (sockstate==4 && ltick%TICKS==0) {
+                if (sockstate == 4 && ltick % TICKS == 0) {
                     cl_ticker();
                 }
                 amod_tick();
@@ -2274,18 +2163,21 @@ int main_loop(void) {
             }
         }
 
-        if (sockstate==4) timediff=nextframe-SDL_GetTicks();
-        else timediff=1;
-        gui_time_network+=SDL_GetTicks64()-start;
+        if (sockstate == 4) {
+            timediff = nextframe - SDL_GetTicks();
+        } else {
+            timediff = 1;
+        }
 
-        if (timediff>-MPF/2) {
-#ifdef TICKPRINT
-            printf("Display tick %d, Frame %d\n",tick,frame);
-#endif
-            gui_frametime=SDL_GetTicks64()-gui_last_frame;
-            gui_last_frame=SDL_GetTicks64();
+        gui_time_network += SDL_GetTicks64() - start;
 
-            if (sdl_is_shown() && (!(tick&3) || !game_slowdown || sockstate!=4)) {
+        if (timediff > -FRAME_TIME / 2) {
+            #ifdef TICKPRINT
+            printf("Display tick %d, Frame %d\n", tick, frame);
+            #endif
+            gui_frametime = SDL_GetTicks64() - gui_last_frame;
+            gui_last_frame = SDL_GetTicks64();
+            if (sdl_is_shown() && (!(tick & 3) || !game_slowdown || sockstate != 4)) {
                 sdl_clear();
                 display();
                 amod_frame();
@@ -2293,42 +2185,42 @@ int main_loop(void) {
                 minimap_update();
             }
 
-            timediff=nextframe-SDL_GetTicks();
-            if (timediff>0) idle+=timediff;
-            else skip-=timediff;
-
+            timediff = nextframe - SDL_GetTicks();
+            if (timediff > 0) {
+                idle += timediff;
+            } else {
+                skip -= timediff;
+            }
             frames++;
-
             flip_at(nextframe);
         } else {
-#ifdef TICKPRINT
-            printf("Skip tick %d, Frame %d\n",tick,frame);
-#endif
-            skip-=timediff;
-
+            #ifdef TICKPRINT
+            printf("Skip tick %d, Frame %d\n", tick, frame);
+            #endif
+            skip -= timediff;
             sdl_loop();
         }
 
         if (do_one_tick) {
-            if (game_options&GO_SHORT) tmp=calc_tick_delay_short(lasttick+q_size);
-            else tmp=calc_tick_delay_normal(lasttick+q_size);
-            nexttick+=tmp;
-            tota+=tmp;
-            if (tick%24==0) { tota/=2; skip/=2; idle/=2; frames/=2; }
-
-            do_one_tick=0;
+            if (game_options & GO_SHORT) {
+                tmp = calc_tick_delay_short(lasttick + q_size);
+            } else {
+                tmp = calc_tick_delay_normal(lasttick + q_size);
+            }
+            nexttick += tmp;
+            tota += tmp;
+            if (tick % 24 == 0) {
+                tota /= 2;
+                skip /= 2;
+                idle /= 2;
+                frames /= 2;
+            }
+            do_one_tick = 0;
         }
 
-        nextframe+=MPF;
-
-        // try to sync frame to tick?
-        if (abs(nexttick-nextframe)<MPF/2) {
-            nextframe=nexttick;
-        }
+        nextframe += FRAME_TIME;
     }
 
     close_client();
-
     return 0;
 }
-
