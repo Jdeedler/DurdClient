@@ -34,31 +34,46 @@ static int display_hover_skill(void);
 
 void display_mouseover(void) {
     int hide;
-
     amod_update_hover_texts();
 
-    if (mousex<0 || mousex>=XRES || mousey<0 || mousey>=YRES || !sdl_has_focus()) return;
+    if (mousex < 0 || mousex >= XRES || mousey < 0 || mousey >= YRES || !sdl_has_focus())
+        return;
 
-    if (mousey>=doty(DOT_SSP) && mousey<=doty(DOT_SSP)+53) {
-        if (mousex>=dotx(DOT_SSP)+28 && mousex<=dotx(DOT_SSP)+35) dd_drawtext_nl(mousex,mousey-16,0xffff,DD_BIG|DD_FRAME|DD_CENTER,hover_rage_text);
-        if (mousex>=dotx(DOT_SSP)+18 && mousex<=dotx(DOT_SSP)+25) dd_drawtext_nl(mousex,mousey-16,0xffff,DD_BIG|DD_FRAME|DD_CENTER,hover_bless_text);
-        if (mousex>=dotx(DOT_SSP)+8 && mousex<=dotx(DOT_SSP)+15) dd_drawtext_nl(mousex,mousey-16,0xffff,DD_BIG|DD_FRAME|DD_CENTER,hover_freeze_text);
-        if (mousex>=dotx(DOT_SSP)-2 && mousex<=dotx(DOT_SSP)+5) dd_drawtext_nl(mousex,mousey-16,0xffff,DD_BIG|DD_FRAME|DD_CENTER,hover_potion_text);
+    int ssp_x = dotx(DOT_SSP);
+    int ssp_y = doty(DOT_SSP);
+    int bot_x = dotx(DOT_BOT);
+    int top_y = doty(DOT_TOP);
+
+    if (mousey >= ssp_y && mousey <= ssp_y + 53) {
+        if (mousex >= ssp_x + 28 && mousex <= ssp_x + 35)
+            dd_drawtext_nl(mousex, mousey - 16, 0xffff, DD_BIG | DD_FRAME | DD_CENTER, hover_rage_text);
+        else if (mousex >= ssp_x + 18 && mousex <= ssp_x + 25)
+            dd_drawtext_nl(mousex, mousey - 16, 0xffff, DD_BIG | DD_FRAME | DD_CENTER, hover_bless_text);
+        else if (mousex >= ssp_x + 8 && mousex <= ssp_x + 15)
+            dd_drawtext_nl(mousex, mousey - 16, 0xffff, DD_BIG | DD_FRAME | DD_CENTER, hover_freeze_text);
+        else if (mousex >= ssp_x - 2 && mousex <= ssp_x + 5)
+            dd_drawtext_nl(mousex, mousey - 16, 0xffff, DD_BIG | DD_FRAME | DD_CENTER, hover_potion_text);
     }
 
-    if (mousex>=dotx(DOT_BOT)+25 && mousex<=dotx(DOT_BOT)+135) {
-        if (mousey>=doty(DOT_TOP)+5 && mousey<=doty(DOT_TOP)+13) dd_drawtext_nl(mousex+16,mousey-4,0xffff,DD_BIG|DD_FRAME,hover_level_text);
-        if (mousey>=doty(DOT_TOP)+22 && mousey<=doty(DOT_TOP)+30) dd_drawtext_nl(mousex+16,mousey-4,0xffff,DD_BIG|DD_FRAME,hover_rank_text);
+    if (mousex >= bot_x + 25 && mousex <= bot_x + 135) {
+        if (mousey >= top_y + 5 && mousey <= top_y + 13)
+            dd_drawtext_nl(mousex + 16, mousey - 4, 0xffff, DD_BIG | DD_FRAME, hover_level_text);
+        else if (mousey >= top_y + 22 && mousey <= top_y + 30)
+            dd_drawtext_nl(mousex + 16, mousey - 4, 0xffff, DD_BIG | DD_FRAME, hover_rank_text);
     }
 
-    if (mousex>=dotx(DOT_TOP)+728 && mousex<=dotx(DOT_TOP)+772 && mousey>=doty(DOT_TOP)+7 && mousey<=doty(DOT_TOP)+17)
-        dd_drawtext_nl(mousex-16,mousey-4,0xffff,DD_BIG|DD_FRAME|DD_RIGHT,hover_time_text);
+    if (mousex >= dotx(DOT_TOP) + 728 && mousex <= dotx(DOT_TOP) + 772 &&
+        mousey >= top_y + 7 && mousey <= top_y + 17)
+        dd_drawtext_nl(mousex - 16, mousey - 4, 0xffff, DD_BIG | DD_FRAME | DD_RIGHT, hover_time_text);
 
     display_hover_update();
-    hide=display_hover();
-    hide+=display_hover_skill();
-    if (hide) sdl_show_cursor(0);
-    else if (capbut==-1) sdl_show_cursor(1);
+    hide = display_hover();
+    hide += display_hover_skill();
+
+    if (hide)
+        sdl_show_cursor(0);
+    else if (capbut == -1)
+        sdl_show_cursor(1);
 }
 
 
