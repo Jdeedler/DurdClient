@@ -10,6 +10,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <time.h>
+#include <stdbool.h>
+#include <math.h>
 
 #include "../../src/astonia.h"
 #include "../../src/gui.h"
@@ -17,6 +21,53 @@
 #include "../../src/game.h"
 #include "../../src/client.h"
 #include "../../src/modder.h"
+
+#define MAX_BUBBLES 100                 // Maximum number of bubbles
+#define AVERAGE_BUBBLE_COUNT 20         // Average number of bubbles on screen
+#define BUBBLE_SPEED_DELAY 20           // Delay between bubble movements (higher value = slower speed)
+
+#define MAX_BUBBLE_SPEED 0.5f           // Maximum bubble speed (pixels per frame)
+#define MAX_BUBBLE_SPEED_X 0.1f         // Maximum horizontal bubble speed
+#define MAX_BUBBLE_SPEED_Y 0.3f         // Maximum vertical bubble speed
+
+#define MIN_BUBBLE_SPEED_X 0.01f        // Minimum horizontal bubble speed
+#define MIN_BUBBLE_SPEED_Y 0.2f         // Minimum vertical bubble speed
+
+#define MAX_X_RANDOMNESS 0.50f          // Maximum randomness factor for horizontal velocity
+#define MAX_Y_RANDOMNESS 0.0f           // Maximum randomness factor for vertical velocity
+#define MAX_Y_VELOCITY_RANDOMNESS 0.5f  // Maximum randomness factor for vertical velocity magnitude
+
+#define VELOCITY_RESET_DELAY_MIN 5      // Minimum delay before resetting velocity (frames)
+#define VELOCITY_RESET_DELAY_MAX 10     // Maximum delay before resetting velocity (frames)
+
+#define X_VELOCITY_SLOWDOWN_FACTOR 0.9f // Factor to slow down horizontal velocity (0.0 - 1.0)
+#define Y_VELOCITY_SLOWDOWN_FACTOR 0.8f // Factor to slow down vertical velocity (0.0 - 1.0)
+
+typedef struct {
+    float x, y; // Current position
+    float vx, vy; // Current velocity
+    float max_vx, max_vy; // Maximum velocity limits
+    float min_vx, min_vy; // Minimum velocity limits
+    int velocity_reset_delay; // Frames until next velocity reset
+    bool active; // Flag indicating if bubble is active
+    int bar_index; // Index of the bar the bubble belongs to
+    int direction;
+} Bubble;
+
+#define MAX_BARS 3
+Bubble *bubbles[MAX_BARS];
+int num_bubbles[MAX_BARS];
+
+bool is_bubble_visible(Bubble *b, int sx, int sy, int xs, int ys);
+void slow_down_velocities(Bubble *b);
+void reset_velocity_if_needed(Bubble *b);
+void clamp_velocity(Bubble *b);
+void init_bubble(int bar_index, int i, int sx, int sy, int xs, int ys, float direction_bias);
+void update_and_draw_bubbles(int bar_index, int bar_left, int bar_top, int bar_width, int bar_height, unsigned short color, float direction_bias, float *sine_table, int sine_table_size);
+void init_bubbles(int bar_index, int sx, int sy, int xs, int ys, float direction_bias);
+void add_new_bubbles(int bar_index, int sx, int sy, int xs, int ys, float direction_bias);
+void init_sine_points(); 
+
 
 char tutor_text[1024]={""};
 int show_tutor=0;
@@ -515,40 +566,41 @@ static void trans_date(int t,int *phour,int *pmin) {
 }
 
 void display_screen(void) {
-    int h,m;
-    int h1,h2,m1,m2;
-    static int rh1=0,rh2=0,rm1=0,rm2=0;
+    const int DOT_TOP_X = dotx(DOT_TOP);
+    const int DOT_TOP_Y = doty(DOT_TOP);
+    const int DOT_BOT_X = dotx(DOT_BOT);
+    const int DOT_BOT_Y = doty(DOT_BOT);
+    const int SPRITE_TOP = 999;
+    const int SPRITE_BASE = 200;
+    const int SPRITE_BOT_SMALL = 991;
+    const int SPRITE_BOT_LARGE = 998;
 
-    dd_copysprite(opt_sprite(999),dotx(DOT_TOP),doty(DOT_TOP),DDFX_NLIGHT,DD_NORMAL);
+    int hours, minutes;
+    int h1, h2, m1, m2;
+    static int rh1 = 0, rh2 = 0, rm1 = 0, rm2 = 0;
 
-    trans_date(realtime,&h,&m);
+    dd_copysprite(opt_sprite(SPRITE_TOP), DOT_TOP_X, DOT_TOP_Y, DDFX_NLIGHT, DD_NORMAL);
 
-    h1=h/10*3;
-    h2=h%10*3;
-    m1=m/10*3;
-    m2=m%10*3;
+    trans_date(realtime, &hours, &minutes);
 
-    if (h1!=rh1) rh1++;
-    if (rh1==30) rh1=0;
+    h1 = (hours / 10) * 3;
+    h2 = (hours % 10) * 3;
+    m1 = (minutes / 10) * 3;
+    m2 = (minutes % 10) * 3;
 
-    if (h2!=rh2) rh2++;
-    if (rh2==30) rh2=0;
+    rh1 = (h1 != rh1) ? (rh1 + 1) % 30 : rh1;
+    rh2 = (h2 != rh2) ? (rh2 + 1) % 30 : rh2;
+    rm1 = (m1 != rm1) ? (rm1 + 1) % 18 : rm1;
+    rm2 = (m2 != rm2) ? (rm2 + 1) % 30 : rm2;
 
-    if (m1!=rm1) rm1++;
-    if (rm1==18) rm1=0;
+    dd_copysprite(SPRITE_BASE + rh1, DOT_TOP_X + 730 + 0 * 10 - 2, DOT_TOP_Y + 5 + 3, DDFX_NLIGHT, DD_NORMAL);
+    dd_copysprite(SPRITE_BASE + rh2, DOT_TOP_X + 730 + 1 * 10 - 2, DOT_TOP_Y + 5 + 3, DDFX_NLIGHT, DD_NORMAL);
+    dd_copysprite(SPRITE_BASE + rm1, DOT_TOP_X + 734 + 2 * 10 - 2, DOT_TOP_Y + 5 + 3, DDFX_NLIGHT, DD_NORMAL);
+    dd_copysprite(SPRITE_BASE + rm2, DOT_TOP_X + 734 + 3 * 10 - 2, DOT_TOP_Y + 5 + 3, DDFX_NLIGHT, DD_NORMAL);
 
-    if (m2!=rm2) rm2++;
-    if (rm2==30) rm2=0;
+    sprintf(hover_time_text, "%02d:%02d Astonia Standard Time", hours, minutes);
 
-    dd_copysprite(200+rh1,dotx(DOT_TOP)+730+0*10-2,doty(DOT_TOP)+5+3,DDFX_NLIGHT,DD_NORMAL);
-    dd_copysprite(200+rh2,dotx(DOT_TOP)+730+1*10-2,doty(DOT_TOP)+5+3,DDFX_NLIGHT,DD_NORMAL);
-    dd_copysprite(200+rm1,dotx(DOT_TOP)+734+2*10-2,doty(DOT_TOP)+5+3,DDFX_NLIGHT,DD_NORMAL);
-    dd_copysprite(200+rm2,dotx(DOT_TOP)+734+3*10-2,doty(DOT_TOP)+5+3,DDFX_NLIGHT,DD_NORMAL);
-
-    sprintf(hover_time_text,"%02d:%02d Astonia Standard Time",h,m);
-
-    if (game_options&GO_SMALLBOT) dd_copysprite(opt_sprite(991),dotx(DOT_BOT),doty(DOT_BOT),DDFX_NLIGHT,DD_NORMAL);
-    else dd_copysprite(opt_sprite(998),dotx(DOT_BOT),doty(DOT_BOT),DDFX_NLIGHT,DD_NORMAL);
+    dd_copysprite(opt_sprite((game_options & GO_SMALLBOT) ? SPRITE_BOT_SMALL : SPRITE_BOT_LARGE), DOT_BOT_X, DOT_BOT_Y, DDFX_NLIGHT, DD_NORMAL);
 }
 
 
@@ -1041,11 +1093,246 @@ void display_action_open(void) {
     save_options();
 }
 
-static void display_bar(int sx,int sy,int perc,unsigned short color,int xs,int ys) {
-    perc=perc*ys/100;
-    dd_shaded_rect(sx-1,sy-1,sx+xs+1,sy+ys+1,0,120);
-    if (perc<100) dd_shaded_rect(sx,sy,sx+xs,sy+ys-perc,IRGB(0,0,0),95);
-    if (perc>0) dd_shaded_rect(sx,sy+ys-perc,sx+xs,sy+ys,color,95);
+
+void display_bar(int bar_index, int sx, int sy, int perc, unsigned short color, int xs, int ys, float direction_bias) {
+    static bool initialized[MAX_BARS] = {false};
+    static float *sine_points = NULL;
+    static int num_sine_points = 100; // Choose a suitable value for num_sine_points
+
+    // Initialize sine_points array if not already done
+    if (!initialized[bar_index]) {
+        if (sine_points == NULL) {
+            init_sine_points(ys, num_sine_points, &sine_points);
+        }
+        init_bubbles(bar_index, sx, sy, xs, ys, direction_bias);
+        initialized[bar_index] = true;
+    }
+
+    // Render the bar background and fill areaa
+    // Define variables for the magic values
+    int background_color = 0;
+    int background_shade = 120;
+    int bar_color = IRGB(0, 0, 0);
+    int bar_shade = 95;
+    int fill_shade = 95;
+
+    // Calculate the fill percentage
+    int fill_percentage = perc * ys / 100;
+
+    // Calculate the coordinates for the background rectangle
+    int bg_left = sx - 1;
+    int bg_top = sy - 1;
+    int bg_right = sx + xs + 1;
+    int bg_bottom = sy + ys + 1;
+
+    // Calculate the coordinates for the bar rectangle
+    int bar_left = sx;
+    int bar_top = sy;
+    int bar_right = sx + xs;
+    int bar_bottom = sy + ys - fill_percentage;
+
+    // Calculate the coordinates for the fill rectangle
+    int fill_left = sx;
+    int fill_top = sy + ys - fill_percentage;
+    int fill_right = sx + xs;
+    int fill_bottom = sy + ys;
+
+    // Render the bar background and fill area
+    dd_shaded_rect(bg_left, bg_top, bg_right, bg_bottom, background_color, background_shade);
+    if (perc < 100)
+        dd_shaded_rect(bar_left, bar_top, bar_right, bar_bottom, bar_color, bar_shade);
+    if (perc > 0)
+        dd_shaded_rect(fill_left, fill_top, fill_right, fill_bottom, color, fill_shade);
+
+    // Update and draw bubbles
+    update_and_draw_bubbles(bar_index, fill_left, fill_top, xs, fill_percentage, color, direction_bias, sine_points, num_sine_points);
+
+    // Add new bubbles
+    add_new_bubbles(bar_index, sx, sy, xs, ys, direction_bias);
+}
+
+void update_bubble_position(Bubble *bubble, int bar_left, int bar_top, int bar_width, int bar_height, float *sine_table, int sine_table_size, float direction_bias) {
+    // Update bubble position based on the direction
+    bubble->x += bubble->direction * bubble->vx;
+    bubble->y -= bubble->vy;
+
+    // Check if the bubble went out of the bar's bounds
+    if (bubble->y < bar_top || bubble->y >= bar_top + bar_height || bubble->x < bar_left || bubble->x >= bar_left + bar_width) {
+        // Reset position
+        bubble->y = bar_top + bar_height - 1; // Set y-coordinate to the bottom of the bar
+        bubble->x = bar_left + rand() % bar_width; // Random x-coordinate within the bar
+
+        // Reset vertical velocity
+        bubble->vy = bubble->max_vy * (rand() / (float)RAND_MAX);
+
+        // Reset velocity reset delay
+        bubble->velocity_reset_delay = VELOCITY_RESET_DELAY_MIN + rand() % (VELOCITY_RESET_DELAY_MAX - VELOCITY_RESET_DELAY_MIN + 1);
+    }
+
+    // Smoothly transition the horizontal velocity towards 0
+    bubble->vx *= 0.95f;
+
+    // If the horizontal velocity is close to 0, randomly determine a new direction
+    if (bubble->vx < 0.01f) {
+        // Randomly determine the new direction (-1 for left, 1 for right)
+        bubble->direction = (rand() % 2 == 0) ? -1 : 1;
+
+        // Set the new horizontal velocity based on the direction and direction bias
+        float velocity_magnitude = bubble->max_vx * (1.0f + direction_bias * bubble->direction);
+        bubble->vx = velocity_magnitude;
+    }
+}
+
+void update_and_draw_bubbles(int bar_index, int bar_left, int bar_top, int bar_width, int bar_height, unsigned short color, float direction_bias, float *sine_table, int sine_table_size) {
+    int i;
+    for (i = 0; i < num_bubbles[bar_index]; i++) {
+        Bubble *current_bubble = &bubbles[bar_index][i];
+        if (current_bubble->active) {
+            // Update the bubble's position
+            update_bubble_position(current_bubble, bar_left, bar_top, bar_width, bar_height, sine_table, sine_table_size, direction_bias);
+
+            // Calculate opacity based on vertical position
+            float relative_height = (current_bubble->y - bar_top) / (float)bar_height;
+            int alpha = 255 * (1 - relative_height);  // Opacity decreases as the bubble rises
+
+            // Draw the bubble if it is within the visible area or near the edges
+            if (is_bubble_visible(current_bubble, bar_left, bar_top, bar_width, bar_height)) {
+                dd_pixel_alpha(current_bubble->x, current_bubble->y, color, alpha);
+            } else {
+                // Deactivate the bubble if it is out of the visible area
+                current_bubble->active = false;
+                num_bubbles[bar_index]--;
+            }
+
+            // Slow down the bubble's velocities
+            slow_down_velocities(current_bubble);
+
+            // Reset the bubble's velocity if necessary
+            reset_velocity_if_needed(current_bubble);
+
+            // Clamp the bubble's velocity within the defined limits
+            clamp_velocity(current_bubble);
+        }
+    }
+}
+
+
+void add_new_bubbles(int bar_index, int sx, int sy, int xs, int ys, float direction_bias) {
+    int i;
+    if (num_bubbles[bar_index] < AVERAGE_BUBBLE_COUNT && rand() % BUBBLE_SPEED_DELAY == 0) {
+        for (i = 0; i < MAX_BUBBLES; i++) {
+            if (!bubbles[bar_index][i].active) {
+                init_bubble(bar_index, i, sx, sy, xs, ys, direction_bias);
+                num_bubbles[bar_index]++;
+                break;
+            }
+        }
+    }
+}
+
+bool is_bubble_visible(Bubble *b, int sx, int sy, int xs, int ys) {
+    // Check if the bubble is within the visible area or near the edges
+    return (b->y >= sy - 2 && b->y <= sy + ys + 2 && b->x >= sx - 2 && b->x <= sx + xs + 2);
+}
+
+void slow_down_velocities(Bubble *b) {
+    // Slow down velocities
+    b->vx *= X_VELOCITY_SLOWDOWN_FACTOR;
+    b->vy *= Y_VELOCITY_SLOWDOWN_FACTOR;
+}
+
+void reset_velocity_if_needed(Bubble *b) {
+    // Reset velocity if necessary
+    if (--b->velocity_reset_delay <= 0) {
+        b->vx = b->max_vx * ((rand() / (float)RAND_MAX) * 2 - 1); // Random horizontal velocity
+        b->vy = b->max_vy * (rand() / (float)RAND_MAX); // Positive vertical velocity
+        b->velocity_reset_delay = VELOCITY_RESET_DELAY_MIN + rand() % (VELOCITY_RESET_DELAY_MAX - VELOCITY_RESET_DELAY_MIN + 1);
+    }
+}
+
+void clamp_velocity(Bubble *b) {
+    // Clamp velocity within limits
+    b->vx = fmax(b->min_vx, fmin(b->max_vx, b->vx));
+    b->vy = fmax(b->min_vy, fmin(b->max_vy, b->vy));
+}
+
+void init_bubble(int bar_index, int i, int sx, int sy, int xs, int ys, float direction_bias) {
+    bubbles[bar_index][i].x = sx + rand() % xs; // Random x-coordinate within the bar
+    bubbles[bar_index][i].y = sy + ys;
+    bubbles[bar_index][i].max_vx = MAX_BUBBLE_SPEED_X * (1 + MAX_X_RANDOMNESS * (rand() / (float)RAND_MAX));
+    bubbles[bar_index][i].max_vy = MAX_BUBBLE_SPEED_Y * (1 + MAX_Y_RANDOMNESS + MAX_Y_VELOCITY_RANDOMNESS * (rand() / (float)RAND_MAX));
+    bubbles[bar_index][i].min_vx = MIN_BUBBLE_SPEED_X;
+    bubbles[bar_index][i].min_vy = MIN_BUBBLE_SPEED_Y;
+
+    // Randomly determine the initial direction (-1 for left, 1 for right)
+    bubbles[bar_index][i].direction = (rand() % 2 == 0) ? -1 : 1;
+
+    // Set the horizontal velocity magnitude based on the direction and direction bias
+    float velocity_magnitude = bubbles[bar_index][i].max_vx * (1.0f + direction_bias * bubbles[bar_index][i].direction);
+    bubbles[bar_index][i].vx = velocity_magnitude;
+
+    bubbles[bar_index][i].vy = bubbles[bar_index][i].max_vy * (rand() / (float)RAND_MAX); // Positive vertical velocity
+    bubbles[bar_index][i].velocity_reset_delay = VELOCITY_RESET_DELAY_MIN + rand() % (VELOCITY_RESET_DELAY_MAX - VELOCITY_RESET_DELAY_MIN + 1);
+    bubbles[bar_index][i].active = true;
+}
+
+void init_bubbles(int bar_index, int bar_left, int bar_top, int bar_width, int bar_height, float direction_bias) {
+    int i;
+
+    // Free the previously allocated memory for the bubbles of this bar
+    if (bubbles[bar_index]) {
+        free(bubbles[bar_index]);
+    }
+
+    // Reset the number of bubbles for this bar
+    num_bubbles[bar_index] = 0;
+
+    // Allocate memory for the bubbles of this bar
+    bubbles[bar_index] = (Bubble*)malloc(sizeof(Bubble) * AVERAGE_BUBBLE_COUNT);
+
+    for (i = 0; i < AVERAGE_BUBBLE_COUNT; i++) {
+        Bubble *new_bubble = &bubbles[bar_index][i];
+
+        // Initialize bubble position
+        new_bubble->x = bar_left + rand() % (bar_width - 1);
+        new_bubble->y = bar_top + bar_height;
+
+        // Initialize bubble maximum velocities with randomness
+        new_bubble->max_vx = MAX_BUBBLE_SPEED_X * (1 + MAX_X_RANDOMNESS * (rand() / (float)RAND_MAX));
+        new_bubble->max_vy = MAX_BUBBLE_SPEED_Y * (1 + MAX_Y_RANDOMNESS + MAX_Y_VELOCITY_RANDOMNESS * (rand() / (float)RAND_MAX));
+
+        // Initialize bubble minimum velocities
+        new_bubble->min_vx = MIN_BUBBLE_SPEED_X;
+        new_bubble->min_vy = MIN_BUBBLE_SPEED_Y;
+
+        // Randomly determine the initial direction (-1 for left, 1 for right)
+        new_bubble->direction = (rand() % 2 == 0) ? -1 : 1;
+
+        // Initialize horizontal velocity magnitude based on the direction and direction bias
+        float velocity_magnitude = new_bubble->max_vx * (1.0f + direction_bias * new_bubble->direction);
+        new_bubble->vx = velocity_magnitude;
+
+        // Initialize vertical velocity
+        new_bubble->vy = -new_bubble->max_vy * (rand() / (float)RAND_MAX);
+
+        // Initialize velocity reset delay
+        new_bubble->velocity_reset_delay = VELOCITY_RESET_DELAY_MIN + rand() % (VELOCITY_RESET_DELAY_MAX - VELOCITY_RESET_DELAY_MIN + 1);
+
+        // Mark the new bubble as active
+        new_bubble->active = true;
+
+        // Increment the number of bubbles for this bar
+        num_bubbles[bar_index]++;
+    }
+}
+
+void init_sine_points(int ys, int num_sine_points, float **sine_points_ptr) {
+    *sine_points_ptr = (float*)malloc(num_sine_points * sizeof(float));
+
+    for (int i = 0; i < num_sine_points; i++) {
+        float y = i * (float)ys / (num_sine_points - 1); // Map index to y-coordinate
+        (*sine_points_ptr)[i] = sin(y * M_PI / ys); // Calculate and store sine value
+    }
 }
 
 static int warcryperccost(void) {
@@ -1054,40 +1341,49 @@ static int warcryperccost(void) {
 }
 
 void display_selfbars(void) {
-    int lifep,shieldp,endup,manap;
-    if (plrmn==-1) return;
-    int x,y;
-    int xs=7,ys=67,xd=3;
+    int lifep, shieldp, endup, manap;
+    if (plrmn == -1) return;
+    int x, y;
+    int xs = 7, ys = 67, xd = 3;
+    float direction_bias = 0.0f; // Adjust this value to control the direction bias
 
-    if (!(game_options&GO_BIGBAR)) return;
+    if (!(game_options & GO_BIGBAR)) return;
+    x = dotx(DOT_MTL) + 7;
+    y = doty(DOT_MTL) + 7;
+    lifep = map[plrmn].health;
+    shieldp = map[plrmn].shield;
+    manap = map[plrmn].mana;
+    if (value[0][V_ENDURANCE]) endup = 100 * endurance / value[0][V_ENDURANCE];
+    else endup = 100;
+    lifep = min(110, lifep);
+    shieldp = min(110, shieldp);
+    manap = min(110, manap);
+    endup = min(110, endup);
 
-    x=dotx(DOT_MTL)+7;
-    y=doty(DOT_MTL)+7;
+    // Display life bar with bubbles
+    display_bar(0, x, y, lifep, healthcolor, xs, ys, direction_bias);
 
-    lifep=map[plrmn].health;
-    shieldp=map[plrmn].shield;
-    manap=map[plrmn].mana;
-    if (value[0][V_ENDURANCE]) endup=100*endurance/value[0][V_ENDURANCE]; else endup=100;
+    // Display shield bar with bubbles
+    display_bar(1, x + xs + xd, y, shieldp, shieldcolor, xs, ys, direction_bias);
 
-    lifep=min(110,lifep);
-    shieldp=min(110,shieldp);
-    manap=min(110,manap);
-    endup=min(110,endup);
-
-    display_bar(x,y,lifep,healthcolor,xs,ys);
-    display_bar(x+xs+xd,y,shieldp,shieldcolor,xs,ys);
     if (!value[0][V_MANA]) {
-        display_bar(x+xs*2+xd*2,y,endup,endurancecolor,xs,ys);
+        // Display endurance bar with bubbles
+        display_bar(2, x + xs * 2 + xd * 2, y, endup, endurancecolor, xs, ys, direction_bias);
+
         if (value[0][V_WARCRY]) {
             int wpc = warcryperccost();
-            for (int i=wpc; i<100; i+=wpc) {
-                int j;
-                j=i*ys/100;
-                if (i<endup) dd_line(x+xs*2+xd*2,y+ys-j,x+xs*3+xd*2,y+ys-j,0x0000);
-                else dd_line(x+xs*2+xd*2,y+ys-j,x+xs*3+xd*2,y+ys-j,0xffff);
+            for (int i = wpc; i < 100; i += wpc) {
+                int j = i * ys / 100;
+                if (i < endup)
+                    dd_line(x + xs * 2 + xd * 2, y + ys - j, x + xs * 3 + xd * 2, y + ys - j, (unsigned short)IRGB(0, 0, 0));
+                else
+                    dd_line(x + xs * 2 + xd * 2, y + ys - j, x + xs * 3 + xd * 2, y + ys - j, (unsigned short)IRGB(255, 255, 255));
             }
         }
-    } else display_bar(x+xs*2+xd*2,y,manap,manacolor,xs,ys);
+    } else {
+        // Display mana bar with bubbles
+        display_bar(2, x + xs * 2 + xd * 2, y, manap, manacolor, xs, ys, direction_bias);
+    }
 }
 
 void display_vnquest(void) {

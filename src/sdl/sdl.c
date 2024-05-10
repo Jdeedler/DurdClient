@@ -2119,6 +2119,35 @@ void sdl_pixel(int x,int y,unsigned short color,int x_offset,int y_offset) {
     SDL_RenderDrawPoints(sdlren,pt,i);
 }
 
+void sdl_pixel_alpha(int x, int y, unsigned short color, int alpha, int x_offset, int y_offset) {
+    int r=R16TO32(color);
+    int g=G16TO32(color);
+    int b=B16TO32(color);
+
+    // Clamp alpha to ensure it's within the 0-255 range
+    alpha = alpha < 0 ? 0 : (alpha > 255 ? 255 : alpha);
+
+    // Set the drawing color with alpha
+    SDL_SetRenderDrawColor(sdlren, r, g, b, alpha);
+
+    // Define a point array for scaling purposes
+    SDL_Point pt[64]; // Adjust if using a scale larger than 8
+    int idx = 0;
+
+    // Generate points based on the scaling factor and add them to the points array
+    for (int i = 0; i < sdl_scale; i++) {
+        for (int j = 0; j < sdl_scale; j++) {
+            pt[idx].x = (x + x_offset) * sdl_scale + i;
+            pt[idx].y = (y + y_offset) * sdl_scale + j;
+            idx++;
+        }
+    }
+
+    // Draw the points
+    SDL_RenderDrawPoints(sdlren, pt, idx);
+}
+
+
 void sdl_line(int fx,int fy,int tx,int ty,unsigned short color,int clipsx,int clipsy,int clipex,int clipey,int x_offset,int y_offset) {
     int r,g,b,a;
 

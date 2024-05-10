@@ -83,4 +83,5 @@ void sdl_flush_textinput(void);
 void sdl_dump_spritecache(void);
 void sdl_tex_alpha(int stx,int alpha);
 int sdl_check_mouse(void);
+void sdl_pixel_alpha(int x, int y, unsigned short color, int alpha, int x_offset, int y_offset);
 

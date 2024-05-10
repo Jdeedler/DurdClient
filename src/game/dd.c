@@ -196,6 +196,11 @@ void dd_shaded_rect(int sx,int sy,int ex,int ey,unsigned short color,unsigned sh
     sdl_shaded_rect(sx,sy,ex,ey,color,alpha,clipsx,clipsy,clipex,clipey,x_offset,y_offset);
 }
 
+void dd_render_circle(int32_t centreX, int32_t centreY, int32_t radius, unsigned short color) {
+    uint32_t sdl_color = (255 << 24) | (IGET_R(color) << 16) | (IGET_G(color) << 8) | IGET_B(color);
+    sdl_render_circle(centreX, centreY, radius, sdl_color);
+}
+
 __declspec(dllexport) void dd_line(int fx,int fy,int tx,int ty,unsigned short col) {
     sdl_line(fx,fy,tx,ty,col,clipsx,clipsy,clipex,clipey,x_offset,y_offset);
 }
@@ -399,6 +404,12 @@ __declspec(dllexport) int dd_drawtext_break_length(int x,int y,int breakx,unsign
 __declspec(dllexport) void dd_pixel(int x,int y,unsigned short col) {
     sdl_pixel(x,y,col,x_offset,y_offset);
 }
+
+__declspec(dllexport) void dd_pixel_alpha(int x, int y, unsigned short col, int alpha) {
+    // Call sdl_pixel_alpha with global offsets
+    sdl_pixel_alpha(x, y, col, alpha, x_offset, y_offset);
+}
+
 
 __declspec(dllexport) int dd_drawtext_fmt(int sx,int sy,unsigned short int color,int flags,const char *format,...) {
     char buf[1024];
