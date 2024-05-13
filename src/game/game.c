@@ -1176,8 +1176,103 @@ int get_sink(int mn,struct map *cmap) {
     return (cmap[mn].sink*(tot-x-y)+cmap[mn2].sink*(x+y))/tot;
 }
 
+void set_lighting(DL *dl, int light, int *quick_mn, struct map *cmap) {
+    int mna;
+    if ((mna=quick_mn[3])!=0 && (cmap[mna].rlight)) dl->ddfx.ll=cmap[mna].rlight;
+    else dl->ddfx.ll=light;
+    if ((mna=quick_mn[5])!=0 && (cmap[mna].rlight)) dl->ddfx.rl=cmap[mna].rlight; 
+    else dl->ddfx.rl=light;
+    if ((mna=quick_mn[1])!=0 && (cmap[mna].rlight)) dl->ddfx.ul=cmap[mna].rlight;
+    else dl->ddfx.ul=light;
+    if ((mna=quick_mn[7])!=0 && (cmap[mna].rlight)) dl->ddfx.dl=cmap[mna].rlight;
+    else dl->ddfx.dl=light;
+}
+
+// Refactoring 2: Applying infra and underwater effects
+void apply_effects(DL *dl, int flags) {
+    if (flags & CMF_INFRA) { 
+        dl->ddfx.cr = min(120, dl->ddfx.cr + 80); 
+        dl->ddfx.sat = min(20, dl->ddfx.sat + 15); 
+    }
+    if (flags & CMF_UNDERWATER) { 
+        dl->ddfx.cb = min(120, dl->ddfx.cb + 80); 
+        dl->ddfx.sat = min(20, dl->ddfx.sat + 10); 
+    }
+}
+
+// Refactoring 3: Setting ddfx fields
+struct ddfx_fields {
+    int scale, cr, cg, cb, light, sat, c1, c2, c3, shine;
+};
+
+void set_ddfx_fields(DL *dl, struct ddfx_fields fields) {
+    dl->ddfx.scale = fields.scale;
+    dl->ddfx.cr = fields.cr;
+    dl->ddfx.cg = fields.cg;
+    dl->ddfx.cb = fields.cb;
+    dl->ddfx.clight = fields.light;
+    dl->ddfx.sat = fields.sat;
+    dl->ddfx.c1 = fields.c1;
+    dl->ddfx.c2 = fields.c2;
+    dl->ddfx.c3 = fields.c3;
+    dl->ddfx.shine = fields.shine;
+}
+
+// Refactoring 4: Setting sink and adjusting y-position and height for items
+void set_item_sink(DL *dl, int flags, int sink) {
+    if (flags & CMF_TAKE) {
+        dl->ddfx.sink = min(12, sink);
+        dl->y += min(6, sink / 2);
+        dl->h -= min(6, sink / 2);
+    } else if (flags & CMF_USE) {
+        dl->ddfx.sink = min(20, sink);
+        dl->y += min(10, sink / 2);
+        dl->h -= min(10, sink / 2);
+    }
+}
+
+// Refactoring 5: Handling spell effects on characters
+void handle_freeze_effect(DL *dl, int nr) {
+    int diff;
+    if ((diff = tick - ceffect[nr].freeze.start) < DDFX_MAX_FREEZE * 4) {
+        dl->ddfx.freeze = diff / 4;
+    } else if (ceffect[nr].freeze.stop < tick) {
+        return;
+    } else if ((diff = ceffect[nr].freeze.stop - tick) < DDFX_MAX_FREEZE * 4) {
+        dl->ddfx.freeze = diff / 4;
+    } else {
+        dl->ddfx.freeze = DDFX_MAX_FREEZE - 1;
+    }
+}
+
+void handle_curse_effect(DL *dl, int nr) {
+    dl->ddfx.sat = min(20, dl->ddfx.sat + (ceffect[nr].curse.strength / 4) + 5);
+    dl->ddfx.clight = min(120, dl->ddfx.clight + ceffect[nr].curse.strength * 2 + 40);
+    dl->ddfx.cb = min(80, dl->ddfx.cb + ceffect[nr].curse.strength / 2 + 10);
+}
+
+void handle_palace_cap_effect(DL *dl) {
+    dl->ddfx.sat = min(20, dl->ddfx.sat + 20);
+    dl->ddfx.clight = min(120, dl->ddfx.clight + 80);
+    dl->ddfx.cb = min(80, dl->ddfx.cb + 80);
+}
+
+void handle_lag_effect(DL *dl) {
+    dl->ddfx.sat = min(20, dl->ddfx.sat + 20);
+    dl->ddfx.clight = max(-120, dl->ddfx.clight - 80);
+}
+
+// Refactoring 6: Incrementing sprite count
+void increment_gsprite_cnt() { gsprite_cnt++; }
+void increment_g2sprite_cnt() { g2sprite_cnt++; }
+void increment_fsprite_cnt() { fsprite_cnt++; }
+void increment_f2sprite_cnt() { f2sprite_cnt++; }
+void increment_isprite_cnt() { isprite_cnt++; }
+void increment_csprite_cnt() { csprite_cnt++; }
+
+
 void display_game_map(struct map *cmap) {
-    int i,nr,mapx,mapy,mn,scrx,scry,light,mna,sprite,sink,xoff,yoff,start;
+    int i,nr,mapx,mapy,mn,scrx,scry,light,sprite,sink,xoff,yoff,start;
     DL *dl;
     int heightadd;
 
@@ -1198,31 +1293,20 @@ void display_game_map(struct map *cmap) {
             dl=dl_next_set(get_lay_sprite(cmap[mn].gsprite,GND_LAY),cmap[mn].rg.sprite,scrx,scry-10,light);
             if (!dl) { note("error in game #1"); continue; }
 
-            if ((mna=quick[i].mn[3])!=0 && (cmap[mna].rlight)) dl->ddfx.ll=cmap[mna].rlight;
-            else dl->ddfx.ll=light;
-            if ((mna=quick[i].mn[5])!=0 && (cmap[mna].rlight)) dl->ddfx.rl=cmap[mna].rlight;
-            else dl->ddfx.rl=light;
-            if ((mna=quick[i].mn[1])!=0 && (cmap[mna].rlight)) dl->ddfx.ul=cmap[mna].rlight;
-            else dl->ddfx.ul=light;
-            if ((mna=quick[i].mn[7])!=0 && (cmap[mna].rlight)) dl->ddfx.dl=cmap[mna].rlight;
-            else dl->ddfx.dl=light;
+            set_lighting(dl, light, quick[i].mn, cmap);
 
-            dl->ddfx.scale=cmap[mn].rg.scale;
-            dl->ddfx.cr=cmap[mn].rg.cr;
-            dl->ddfx.cg=cmap[mn].rg.cg;
-            dl->ddfx.cb=cmap[mn].rg.cb;
-            dl->ddfx.clight=cmap[mn].rg.light;
-            dl->ddfx.sat=cmap[mn].rg.sat;
-            dl->ddfx.c1=cmap[mn].rg.c1;
-            dl->ddfx.c2=cmap[mn].rg.c2;
-            dl->ddfx.c3=cmap[mn].rg.c3;
-            dl->ddfx.shine=cmap[mn].rg.shine;
+            struct ddfx_fields fields = {
+                cmap[mn].rg.scale, cmap[mn].rg.cr, cmap[mn].rg.cg, cmap[mn].rg.cb,
+                cmap[mn].rg.light, cmap[mn].rg.sat, cmap[mn].rg.c1, cmap[mn].rg.c2,
+                cmap[mn].rg.c3, cmap[mn].rg.shine
+            };
+            set_ddfx_fields(dl, fields);
+
             dl->h=-10;
 
-            if (cmap[mn].flags&CMF_INFRA) { dl->ddfx.cr=min(120,dl->ddfx.cr+80); dl->ddfx.sat=min(20,dl->ddfx.sat+15); }
-            if (cmap[mn].flags&CMF_UNDERWATER) { dl->ddfx.cb=min(120,dl->ddfx.cb+80); dl->ddfx.sat=min(20,dl->ddfx.sat+10); }
+            apply_effects(dl, cmap[mn].flags);
 
-            gsprite_cnt++;
+            increment_gsprite_cnt();
         }
 
         // ... 2nd (gsprite2)
@@ -1230,30 +1314,18 @@ void display_game_map(struct map *cmap) {
             dl=dl_next_set(get_lay_sprite(cmap[mn].gsprite2,GND2_LAY),cmap[mn].rg2.sprite,scrx,scry,light);
             if (!dl) { note("error in game #2"); continue; }
 
-            if ((mna=quick[i].mn[3])!=0 && (cmap[mna].rlight)) dl->ddfx.ll=cmap[mna].rlight;
-            else dl->ddfx.ll=light;
-            if ((mna=quick[i].mn[5])!=0 && (cmap[mna].rlight)) dl->ddfx.rl=cmap[mna].rlight;
-            else dl->ddfx.rl=light;
-            if ((mna=quick[i].mn[1])!=0 && (cmap[mna].rlight)) dl->ddfx.ul=cmap[mna].rlight;
-            else dl->ddfx.ul=light;
-            if ((mna=quick[i].mn[7])!=0 && (cmap[mna].rlight)) dl->ddfx.dl=cmap[mna].rlight;
-            else dl->ddfx.dl=light;
+            set_lighting(dl, light, quick[i].mn, cmap);
 
-            dl->ddfx.scale=cmap[mn].rg2.scale;
-            dl->ddfx.cr=cmap[mn].rg2.cr;
-            dl->ddfx.cg=cmap[mn].rg2.cg;
-            dl->ddfx.cb=cmap[mn].rg2.cb;
-            dl->ddfx.clight=cmap[mn].rg2.light;
-            dl->ddfx.sat=cmap[mn].rg2.sat;
-            dl->ddfx.c1=cmap[mn].rg2.c1;
-            dl->ddfx.c2=cmap[mn].rg2.c2;
-            dl->ddfx.c3=cmap[mn].rg2.c3;
-            dl->ddfx.shine=cmap[mn].rg2.shine;
+            struct ddfx_fields fields = {
+                cmap[mn].rg2.scale, cmap[mn].rg2.cr, cmap[mn].rg2.cg, cmap[mn].rg2.cb,
+                cmap[mn].rg2.light, cmap[mn].rg2.sat, cmap[mn].rg2.c1, cmap[mn].rg2.c2,
+                cmap[mn].rg2.c3, cmap[mn].rg2.shine
+            };
+            set_ddfx_fields(dl, fields);
 
-            if (cmap[mn].flags&CMF_INFRA) { dl->ddfx.cr=min(120,dl->ddfx.cr+80); dl->ddfx.sat=min(20,dl->ddfx.sat+15); }
-            if (cmap[mn].flags&CMF_UNDERWATER) { dl->ddfx.cb=min(120,dl->ddfx.cb+80); dl->ddfx.sat=min(20,dl->ddfx.sat+10); }
+            apply_effects(dl, cmap[mn].flags);
 
-            g2sprite_cnt++;
+            increment_g2sprite_cnt();
         }
 
         if (cmap[mn].mmf&MMF_STRAIGHT_T) dl_next_set(GNDSTR_LAY,50,scrx,scry,DDFX_NLIGHT);
@@ -1267,40 +1339,29 @@ void display_game_map(struct map *cmap) {
             dl=dl_next_set(get_lay_sprite(cmap[mn].fsprite,GME_LAY),cmap[mn].rf.sprite,scrx,scry-9,light);
             if (!dl) { note("error in game #3"); continue; }
             dl->h=-9;
-            if ((mna=quick[i].mn[3])!=0 && (cmap[mna].rlight)) dl->ddfx.ll=cmap[mna].rlight;
-            else dl->ddfx.ll=light;
-            if ((mna=quick[i].mn[5])!=0 && (cmap[mna].rlight)) dl->ddfx.rl=cmap[mna].rlight;
-            else dl->ddfx.rl=light;
-            if ((mna=quick[i].mn[1])!=0 && (cmap[mna].rlight)) dl->ddfx.ul=cmap[mna].rlight;
-            else dl->ddfx.ul=light;
-            if ((mna=quick[i].mn[7])!=0 && (cmap[mna].rlight)) dl->ddfx.dl=cmap[mna].rlight;
-            else dl->ddfx.dl=light;
+
+            set_lighting(dl, light, quick[i].mn, cmap);
 
             if (no_lighting_sprite(cmap[mn].fsprite)) dl->ddfx.ll=dl->ddfx.rl=dl->ddfx.ul=dl->ddfx.dl=dl->ddfx.ml;
 
             // fsprite can increase the height of items and fsprite2
             heightadd=is_yadd_sprite(cmap[mn].rf.sprite);
 
-            dl->ddfx.scale=cmap[mn].rf.scale;
-            dl->ddfx.cr=cmap[mn].rf.cr;
-            dl->ddfx.cg=cmap[mn].rf.cg;
-            dl->ddfx.cb=cmap[mn].rf.cb;
-            dl->ddfx.clight=cmap[mn].rf.light;
-            dl->ddfx.sat=cmap[mn].rf.sat;
-            dl->ddfx.c1=cmap[mn].rf.c1;
-            dl->ddfx.c2=cmap[mn].rf.c2;
-            dl->ddfx.c3=cmap[mn].rf.c3;
-            dl->ddfx.shine=cmap[mn].rf.shine;
+            struct ddfx_fields fields = {
+                cmap[mn].rf.scale, cmap[mn].rf.cr, cmap[mn].rf.cg, cmap[mn].rf.cb,
+                cmap[mn].rf.light, cmap[mn].rf.sat, cmap[mn].rf.c1, cmap[mn].rf.c2,
+                cmap[mn].rf.c3, cmap[mn].rf.shine
+            };
+            set_ddfx_fields(dl, fields);
 
-            if (cmap[mn].flags&CMF_INFRA) { dl->ddfx.cr=min(120,dl->ddfx.cr+80); dl->ddfx.sat=min(20,dl->ddfx.sat+15); }
-            if (cmap[mn].flags&CMF_UNDERWATER) { dl->ddfx.cb=min(120,dl->ddfx.cb+80); dl->ddfx.sat=min(20,dl->ddfx.sat+10); }
+            apply_effects(dl, cmap[mn].flags);
 
             if (get_offset_sprite(cmap[mn].fsprite,&xoff,&yoff)) {
                 dl->x+=xoff;
                 dl->y+=yoff;
             }
 
-            fsprite_cnt++;
+            increment_fsprite_cnt();
         } else heightadd=0;
 
         // ... 2nd (fsprite2)
@@ -1309,40 +1370,30 @@ void display_game_map(struct map *cmap) {
             dl=dl_next_set(get_lay_sprite(cmap[mn].fsprite2,GME_LAY),cmap[mn].rf2.sprite,scrx,scry+1,light);
             if (!dl) { note("error in game #5"); continue; }
             dl->h=1;
-            if ((mna=quick[i].mn[3])!=0 && (cmap[mna].rlight)) dl->ddfx.ll=cmap[mna].rlight;
-            else dl->ddfx.ll=light;
-            if ((mna=quick[i].mn[5])!=0 && (cmap[mna].rlight)) dl->ddfx.rl=cmap[mna].rlight;
-            else dl->ddfx.rl=light;
-            if ((mna=quick[i].mn[1])!=0 && (cmap[mna].rlight)) dl->ddfx.ul=cmap[mna].rlight;
-            else dl->ddfx.ul=light;
-            if ((mna=quick[i].mn[7])!=0 && (cmap[mna].rlight)) dl->ddfx.dl=cmap[mna].rlight;
-            else dl->ddfx.dl=light;
+
+            set_lighting(dl, light, quick[i].mn, cmap);
 
             if (no_lighting_sprite(cmap[mn].fsprite2)) dl->ddfx.ll=dl->ddfx.rl=dl->ddfx.ul=dl->ddfx.dl=dl->ddfx.ml;
 
             dl->y+=1;
             dl->h+=1;
             dl->h+=heightadd;
-            dl->ddfx.scale=cmap[mn].rf2.scale;
-            dl->ddfx.cr=cmap[mn].rf2.cr;
-            dl->ddfx.cg=cmap[mn].rf2.cg;
-            dl->ddfx.cb=cmap[mn].rf2.cb;
-            dl->ddfx.clight=cmap[mn].rf2.light;
-            dl->ddfx.sat=cmap[mn].rf2.sat;
-            dl->ddfx.c1=cmap[mn].rf2.c1;
-            dl->ddfx.c2=cmap[mn].rf2.c2;
-            dl->ddfx.c3=cmap[mn].rf2.c3;
-            dl->ddfx.shine=cmap[mn].rf2.shine;
 
-            if (cmap[mn].flags&CMF_INFRA) { dl->ddfx.cr=min(120,dl->ddfx.cr+80); dl->ddfx.sat=min(20,dl->ddfx.sat+15); }
-            if (cmap[mn].flags&CMF_UNDERWATER) { dl->ddfx.cb=min(120,dl->ddfx.cb+80); dl->ddfx.sat=min(20,dl->ddfx.sat+10); }
+            struct ddfx_fields fields = {
+                cmap[mn].rf2.scale, cmap[mn].rf2.cr, cmap[mn].rf2.cg, cmap[mn].rf2.cb,
+                cmap[mn].rf2.light, cmap[mn].rf2.sat, cmap[mn].rf2.c1, cmap[mn].rf2.c2,
+                cmap[mn].rf2.c3, cmap[mn].rf2.shine
+            };
+            set_ddfx_fields(dl, fields);
+
+            apply_effects(dl, cmap[mn].flags);
 
             if (get_offset_sprite(cmap[mn].fsprite2,&xoff,&yoff)) {
                 dl->x+=xoff;
                 dl->y+=yoff;
             }
 
-            f2sprite_cnt++;
+            increment_f2sprite_cnt();
         }
 
         // blit items
@@ -1350,52 +1401,27 @@ void display_game_map(struct map *cmap) {
             dl=dl_next_set(get_lay_sprite(cmap[mn].isprite,GME_LAY),cmap[mn].ri.sprite,scrx,scry-8,itmsel==mn?DDFX_BRIGHT:light);
             if (!dl) { note("error in game #8 (%d,%d)",cmap[mn].ri.sprite,cmap[mn].isprite); continue; }
 
-
-#if 0
-            // Disabled shaded lighting for items. It is often wrong and needs re-doing
-            if ((mna=quick[i].mn[3])!=0 && (cmap[mna].rlight)) dl->ddfx.ll=cmap[mna].rlight;
-            else dl->ddfx.ll=light;
-            if ((mna=quick[i].mn[5])!=0 && (cmap[mna].rlight)) dl->ddfx.rl=cmap[mna].rlight;
-            else dl->ddfx.rl=light;
-            if ((mna=quick[i].mn[1])!=0 && (cmap[mna].rlight)) dl->ddfx.ul=cmap[mna].rlight;
-            else dl->ddfx.ul=light;
-            if ((mna=quick[i].mn[7])!=0 && (cmap[mna].rlight)) dl->ddfx.dl=cmap[mna].rlight;
-            else dl->ddfx.dl=light;
-#else
             dl->ddfx.ll=dl->ddfx.rl=dl->ddfx.ul=dl->ddfx.dl=dl->ddfx.ml;
-#endif
 
             dl->h+=heightadd-8;
-            dl->ddfx.scale=cmap[mn].ri.scale;
-            dl->ddfx.cr=cmap[mn].ri.cr;
-            dl->ddfx.cg=cmap[mn].ri.cg;
-            dl->ddfx.cb=cmap[mn].ri.cb;
-            dl->ddfx.clight=cmap[mn].ri.light;
-            dl->ddfx.sat=cmap[mn].ri.sat;
-            dl->ddfx.c1=cmap[mn].ri.c1;
-            dl->ddfx.c2=cmap[mn].ri.c2;
-            dl->ddfx.c3=cmap[mn].ri.c3;
-            dl->ddfx.shine=cmap[mn].ri.shine;
 
-            if (cmap[mn].flags&CMF_INFRA) { dl->ddfx.cr=min(120,dl->ddfx.cr+80); dl->ddfx.sat=min(20,dl->ddfx.sat+15); }
-            if (cmap[mn].flags&CMF_UNDERWATER) { dl->ddfx.cb=min(120,dl->ddfx.cb+80); dl->ddfx.sat=min(20,dl->ddfx.sat+10); }
+            struct ddfx_fields fields = {
+                cmap[mn].ri.scale, cmap[mn].ri.cr, cmap[mn].ri.cg, cmap[mn].ri.cb,
+                cmap[mn].ri.light, cmap[mn].ri.sat, cmap[mn].ri.c1, cmap[mn].ri.c2,
+                cmap[mn].ri.c3, cmap[mn].ri.shine
+            };
+            set_ddfx_fields(dl, fields);
 
-            if (cmap[mn].flags&CMF_TAKE) {
-                dl->ddfx.sink=min(12,cmap[mn].sink);
-                dl->y+=min(6,cmap[mn].sink/2);
-                dl->h+=-min(6,cmap[mn].sink/2);
-            } else if (cmap[mn].flags&CMF_USE) {
-                dl->ddfx.sink=min(20,cmap[mn].sink);
-                dl->y+=min(10,cmap[mn].sink/2);
-                dl->h+=-min(10,cmap[mn].sink/2);
-            }
+            apply_effects(dl, cmap[mn].flags);
+
+            set_item_sink(dl, cmap[mn].flags, cmap[mn].sink);
 
             if (get_offset_sprite(cmap[mn].isprite,&xoff,&yoff)) {
                 dl->x+=xoff;
                 dl->y+=yoff;
             }
 
-            isprite_cnt++;
+            increment_isprite_cnt();
         }
 
         // blit chars
@@ -1406,68 +1432,47 @@ void display_game_map(struct map *cmap) {
             dl->ddfx.sink=sink;
             dl->y+=sink/2;
             dl->h=-sink/2;
-            dl->ddfx.scale=cmap[mn].rc.scale;
-            //addline("sprite=%d, scale=%d",cmap[mn].rc.sprite,cmap[mn].rc.scale);
-            dl->ddfx.cr=cmap[mn].rc.cr;
-            dl->ddfx.cg=cmap[mn].rc.cg;
-            dl->ddfx.cb=cmap[mn].rc.cb;
-            dl->ddfx.clight=cmap[mn].rc.light;
-            dl->ddfx.sat=cmap[mn].rc.sat;
-            dl->ddfx.c1=cmap[mn].rc.c1;
-            dl->ddfx.c2=cmap[mn].rc.c2;
-            dl->ddfx.c3=cmap[mn].rc.c3;
-            dl->ddfx.shine=cmap[mn].rc.shine;
+
+            struct ddfx_fields fields = {
+                cmap[mn].rc.scale, cmap[mn].rc.cr, cmap[mn].rc.cg, cmap[mn].rc.cb,
+                cmap[mn].rc.light, cmap[mn].rc.sat, cmap[mn].rc.c1, cmap[mn].rc.c2,
+                cmap[mn].rc.c3, cmap[mn].rc.shine
+            };
+            set_ddfx_fields(dl, fields);
 
             // check for spells on char
             for (nr=0; nr<MAXEF; nr++) {
                 if (!ueffect[nr]) continue;
-                if ((unsigned int)ceffect[nr].freeze.cn==map[mn].cn && ceffect[nr].generic.type==11) { // freeze
-                    int diff;
-
-                    if ((diff=tick-ceffect[nr].freeze.start)<DDFX_MAX_FREEZE*4) {   // starting
-                        dl->ddfx.freeze=diff/4;
-                    } else if (ceffect[nr].freeze.stop<tick) {          // already finished
-                        continue;
-                    } else if ((diff=ceffect[nr].freeze.stop-tick)<DDFX_MAX_FREEZE*4) { // ending
-                        dl->ddfx.freeze=diff/4;
-                    } else dl->ddfx.freeze=DDFX_MAX_FREEZE-1;       // running
+                if ((unsigned int)ceffect[nr].freeze.cn==map[mn].cn && ceffect[nr].generic.type==11) {
+                    handle_freeze_effect(dl, nr);
                 }
-                if ((unsigned int)ceffect[nr].curse.cn==map[mn].cn && ceffect[nr].generic.type==18) { // curse
-
-                    dl->ddfx.sat=min(20,dl->ddfx.sat+(ceffect[nr].curse.strength/4)+5);
-                    dl->ddfx.clight=min(120,dl->ddfx.clight+ceffect[nr].curse.strength*2+40);
-                    dl->ddfx.cb=min(80,dl->ddfx.cb+ceffect[nr].curse.strength/2+10);
+                if ((unsigned int)ceffect[nr].curse.cn==map[mn].cn && ceffect[nr].generic.type==18) {
+                    handle_curse_effect(dl, nr);
                 }
-                if ((unsigned int)ceffect[nr].cap.cn==map[mn].cn && ceffect[nr].generic.type==19) { // palace cap
-
-                    dl->ddfx.sat=min(20,dl->ddfx.sat+20);
-                    dl->ddfx.clight=min(120,dl->ddfx.clight+80);
-                    dl->ddfx.cb=min(80,dl->ddfx.cb+80);
+                if ((unsigned int)ceffect[nr].cap.cn==map[mn].cn && ceffect[nr].generic.type==19) {
+                    handle_palace_cap_effect(dl);
                 }
-                if ((unsigned int)ceffect[nr].lag.cn==map[mn].cn && ceffect[nr].generic.type==20) { // lag
-
-                    dl->ddfx.sat=min(20,dl->ddfx.sat+20);
-                    dl->ddfx.clight=max(-120,dl->ddfx.clight-80);
+                if ((unsigned int)ceffect[nr].lag.cn==map[mn].cn && ceffect[nr].generic.type==20) {
+                    handle_lag_effect(dl);
                 }
-            }
-            if (cmap[mn].gsprite==51066) {
-                dl->ddfx.sat=20;
-                dl->ddfx.cr=80;
-                dl->ddfx.clight=-80;
-                dl->ddfx.shine=50;
-                dl->ddfx.ml=dl->ddfx.ll=dl->ddfx.rl=dl->ddfx.ul=dl->ddfx.dl=chrsel==mn?DDFX_BRIGHT:DDFX_NLIGHT;
-            } else if (cmap[mn].gsprite==51067) {
-                dl->ddfx.sat=20;
-                dl->ddfx.cb=80;
-                dl->ddfx.clight=-80;
-                dl->ddfx.shine=50;
-                dl->ddfx.ml=dl->ddfx.ll=dl->ddfx.rl=dl->ddfx.ul=dl->ddfx.dl=chrsel==mn?DDFX_BRIGHT:DDFX_NLIGHT;
-            } else {
-                if (cmap[mn].flags&CMF_INFRA) { dl->ddfx.cr=min(120,dl->ddfx.cr+80); dl->ddfx.sat=min(20,dl->ddfx.sat+15); }
-                if (cmap[mn].flags&CMF_UNDERWATER) { dl->ddfx.cb=min(120,dl->ddfx.cb+80); dl->ddfx.sat=min(20,dl->ddfx.sat+10); }
-            }
+                }
+                if (cmap[mn].gsprite==51066) {
+                    dl->ddfx.sat=20;
+                    dl->ddfx.cr=80;
+                    dl->ddfx.clight=-80;
+                    dl->ddfx.shine=50;
+                    dl->ddfx.ml=dl->ddfx.ll=dl->ddfx.rl=dl->ddfx.ul=dl->ddfx.dl=chrsel==mn?DDFX_BRIGHT:DDFX_NLIGHT;
+                } else if (cmap[mn].gsprite==51067) {
+                    dl->ddfx.sat=20;
+                    dl->ddfx.cb=80;
+                    dl->ddfx.clight=-80;
+                    dl->ddfx.shine=50;
+                    dl->ddfx.ml=dl->ddfx.ll=dl->ddfx.rl=dl->ddfx.ul=dl->ddfx.dl=chrsel==mn?DDFX_BRIGHT:DDFX_NLIGHT;
+                } else {
+                    apply_effects(dl, cmap[mn].flags);
+                }
 
-            csprite_cnt++;
+                        increment_csprite_cnt();
         }
     }
     show_bubbles();
@@ -1495,6 +1500,7 @@ void display_game_map(struct map *cmap) {
         if (act!=PAC_MOVE) display_game_act();
     }
 }
+
 
 void display_pents(void) {
     int n,col,yoff;

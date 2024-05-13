@@ -387,3 +387,6 @@ void display_action_lock(void);
 void display_action_open(void);
 void display_wear_lock(void);
 void display_vnquest(void);
+void display_connection_status(int sockstate, int originx, int t);
+void display_graphics(int game_options);
+void display_game_info(void);

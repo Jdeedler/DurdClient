@@ -121,5 +121,6 @@ void dd_set_textfont(int nr);
 void dd_create_font(void);
 void dd_init_text(void);
 void dd_display_strike(int fx,int fy,int tx,int ty);
+void set_lighting(DL *dl, int light, int *quick_mn, struct map *cmap);
 
 
