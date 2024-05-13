@@ -66,7 +66,19 @@ void init_bubble(int bar_index, int i, int sx, int sy, int xs, int ys, float dir
 void update_and_draw_bubbles(int bar_index, int bar_left, int bar_top, int bar_width, int bar_height, unsigned short color, float direction_bias, float *sine_table, int sine_table_size);
 void init_bubbles(int bar_index, int sx, int sy, int xs, int ys, float direction_bias);
 void add_new_bubbles(int bar_index, int sx, int sy, int xs, int ys, float direction_bias);
-void init_sine_points(); 
+void init_sine_points();
+
+clock_t last_time = 0;
+float interp_health = (float)0.0f;
+float interp_shield = (float)0.0f;
+float interp_mana = (float)0.0f;
+float interp_endurance = (float)0.0f;
+
+float lerp(float a, float b, float t);
+
+float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
 
 
 char tutor_text[1024]={""};
@@ -1098,6 +1110,8 @@ void display_bar(int bar_index, int sx, int sy, int perc, unsigned short color, 
     static bool initialized[MAX_BARS] = {false};
     static float *sine_points = NULL;
     static int num_sine_points = 100; // Choose a suitable value for num_sine_points
+    static int last_perc[MAX_BARS] = {0}; // Store the last percentage for each bar
+    static clock_t last_time[MAX_BARS] = {0}; // Store the last time for each bar
 
     // Initialize sine_points array if not already done
     if (!initialized[bar_index]) {
@@ -1108,7 +1122,16 @@ void display_bar(int bar_index, int sx, int sy, int perc, unsigned short color, 
         initialized[bar_index] = true;
     }
 
-    // Render the bar background and fill areaa
+    // Calculate delta_time for this bar
+    clock_t current_time = clock();
+    float delta_time = (float)(current_time - last_time[bar_index]) / CLOCKS_PER_SEC;
+    last_time[bar_index] = current_time;
+
+    // Interpolate the bar percentage for smooth transitions
+    int interpolated_perc = (int)lerp(last_perc[bar_index], perc, delta_time);
+    last_perc[bar_index] = perc;
+
+    // Render the bar background and fill area
     // Define variables for the magic values
     int background_color = 0;
     int background_shade = 120;
@@ -1117,7 +1140,7 @@ void display_bar(int bar_index, int sx, int sy, int perc, unsigned short color, 
     int fill_shade = 95;
 
     // Calculate the fill percentage
-    int fill_percentage = perc * ys / 100;
+    int fill_percentage = interpolated_perc * ys / 100;
 
     // Calculate the coordinates for the background rectangle
     int bg_left = sx - 1;
@@ -1139,9 +1162,9 @@ void display_bar(int bar_index, int sx, int sy, int perc, unsigned short color, 
 
     // Render the bar background and fill area
     dd_shaded_rect(bg_left, bg_top, bg_right, bg_bottom, background_color, background_shade);
-    if (perc < 100)
+    if (interpolated_perc < 100)
         dd_shaded_rect(bar_left, bar_top, bar_right, bar_bottom, bar_color, bar_shade);
-    if (perc > 0)
+    if (interpolated_perc > 0)
         dd_shaded_rect(fill_left, fill_top, fill_right, fill_bottom, color, fill_shade);
 
     // Update and draw bubbles
@@ -1150,6 +1173,7 @@ void display_bar(int bar_index, int sx, int sy, int perc, unsigned short color, 
     // Add new bubbles
     add_new_bubbles(bar_index, sx, sy, xs, ys, direction_bias);
 }
+
 
 void update_bubble_position(Bubble *bubble, int bar_left, int bar_top, int bar_width, int bar_height, float *sine_table, int sine_table_size, float direction_bias) {
     // Update bubble position based on the direction
@@ -1340,6 +1364,13 @@ static int warcryperccost(void) {
     else return 911;
 }
 
+void update_interpolated_values(int health, int shield, int mana, int endurance) {
+    interp_health = (float)health;
+    interp_shield = (float)shield;
+    interp_mana = (float)mana;
+    interp_endurance = (float)endurance / value[0][V_ENDURANCE];
+}
+
 void display_selfbars(void) {
     int lifep, shieldp, endup, manap;
     if (plrmn == -1) return;
@@ -1348,13 +1379,30 @@ void display_selfbars(void) {
     float direction_bias = 0.0f; // Adjust this value to control the direction bias
 
     if (!(game_options & GO_BIGBAR)) return;
+
     x = dotx(DOT_MTL) + 7;
     y = doty(DOT_MTL) + 7;
+
+    // Get the new bar values from the server
     lifep = map[plrmn].health;
     shieldp = map[plrmn].shield;
     manap = map[plrmn].mana;
-    if (value[0][V_ENDURANCE]) endup = 100 * endurance / value[0][V_ENDURANCE];
-    else endup = 100;
+    endup = 100 * endurance / value[0][V_ENDURANCE];
+
+    // Update the interpolated values with the new target values
+    update_interpolated_values(lifep, shieldp, manap, endup);
+
+    // Calculate delta_time
+    clock_t current_time = clock();
+    float delta_time = (float)(current_time - last_time) / CLOCKS_PER_SEC;
+    last_time = current_time;
+
+    // Interpolate the bar values for smooth transitions
+    lifep = (int)lerp(interp_health, lifep, delta_time);
+    shieldp = (int)lerp(interp_shield, shieldp, delta_time);
+    manap = (int)lerp(interp_mana, manap, delta_time);
+    endup = (int)lerp(interp_endurance * value[0][V_ENDURANCE], endup, delta_time);
+
     lifep = min(110, lifep);
     shieldp = min(110, shieldp);
     manap = min(110, manap);
@@ -1369,7 +1417,6 @@ void display_selfbars(void) {
     if (!value[0][V_MANA]) {
         // Display endurance bar with bubbles
         display_bar(2, x + xs * 2 + xd * 2, y, endup, endurancecolor, xs, ys, direction_bias);
-
         if (value[0][V_WARCRY]) {
             int wpc = warcryperccost();
             for (int i = wpc; i < 100; i += wpc) {

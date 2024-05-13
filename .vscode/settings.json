@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "astonia.h": "c",
+        "cstdlib": "c",
+        "_gui.h": "c",
+        "type_traits": "c"
+    }
+}

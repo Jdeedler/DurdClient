@@ -493,6 +493,10 @@ extern int tick;
 extern int lasttick;                    // ticks in inbuf
 extern int q_size;
 
+// External linkage to game time and interpolated values
+extern float interp_health, interp_shield, interp_mana, interp_endurance;
+extern float delta_time; // Time elapsed since last frame in seconds
+
 extern unsigned int cflags;     // current item (item under mouse cursor) flags
 extern unsigned int csprite;    // and sprite
 

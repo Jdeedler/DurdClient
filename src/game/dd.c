@@ -439,19 +439,32 @@ static int bless_sin[36];
 static int bless_cos[36];
 static int bless_hight[200];
 
-void dd_draw_bless_pix(int x,int y,int nr,int color,int front) {
-    int sy;
+void dd_draw_bless_pix(int x, int y, int nr, int color, int front) {
+  int sy;
+  sy = bless_sin[nr % 36];
+  if (front && sy < 0) return;
+  if (!front && sy >= 0) return;
+  x += bless_cos[nr % 36];
+  y = y + sy + bless_hight[nr % 200];
+  if (x < clipsx || x >= clipex || y < clipsy || y >= clipey) return;
+  
+  // Calculate alpha based on sy. 
+  // This is a simple example, you can adjust the formula to your needs.
+  int alpha = 255; // Alpha will range from 255 to 55
 
-    sy=bless_sin[nr%36];
-    if (front && sy<0) return;
-    if (!front && sy>=0) return;
+  sdl_pixel_alpha(x, y, color, alpha, x_offset, y_offset); 
+}
 
-    x+=bless_cos[nr%36];
-    y=y+sy+bless_hight[nr%200];
+void dd_draw_bless_pix_alpha(int x, int y, int nr, int color, int alpha, int front) {
+  int sy;
+  sy = bless_sin[nr % 36];
+  if (front && sy < 0) return;
+  if (!front && sy >= 0) return;
+  x += bless_cos[nr % 36];
+  y = y + sy + bless_hight[nr % 200];
+  if (x < clipsx || x >= clipex || y < clipsy || y >= clipey) return;
 
-    if (x<clipsx || x>=clipex || y<clipsy || y>=clipey) return;
-
-    sdl_pixel(x,y,color,x_offset,y_offset);
+  sdl_pixel_alpha(x, y, color, alpha, x_offset, y_offset);
 }
 
 void dd_draw_rain_pix(int x,int y,int nr,int color,int front) {
@@ -469,30 +482,59 @@ void dd_draw_rain_pix(int x,int y,int nr,int color,int front) {
     sdl_pixel(x,y,color,x_offset,y_offset);
 }
 
-void dd_draw_bless(int x,int y,int ticker,int strength,int front) {
-    int step,nr;
+void dd_draw_bless(int x, int y, int ticker, int strength, int front) {
+    int step, nr;
     double light;
 
+    // Initialize pre-calculated values only once
     if (!bless_init) {
-        for (nr=0; nr<36; nr++) {
-            bless_sin[nr]=sin((nr%36)/36.0*M_PI*2)*8;
-            bless_cos[nr]=cos((nr%36)/36.0*M_PI*2)*16;
+        for (nr = 0; nr < 36; nr++) {
+            bless_sin[nr] = sin((nr % 36) / 36.0 * M_PI * 2) * 8;
+            bless_cos[nr] = cos((nr % 36) / 36.0 * M_PI * 2) * 16;
         }
-        for (nr=0; nr<200; nr++) {
-            bless_hight[nr]=-20+sin((nr%200)/200.0*M_PI*2)*20;
+        for (nr = 0; nr < 200; nr++) {
+            bless_hight[nr] = -20 + sin((nr % 200) / 200.0 * M_PI * 2) * 20;
         }
-        bless_init=1;
+        bless_init = 1;
     }
 
-    if (ticker>62) light=1.0;
-    else light=(ticker)/62.0;
+    // Calculate brightness based on ticker value
+    light = (ticker > 62) ? 1.0 : (ticker) / 62.0;
 
-    for (step=0; step<strength*10; step+=17) {
-        dd_draw_bless_pix(x,y,ticker+step+0,IRGB(((int)(24*light)),((int)(24*light)),((int)(31*light))),front);
-        dd_draw_bless_pix(x,y,ticker+step+1,IRGB(((int)(20*light)),((int)(20*light)),((int)(28*light))),front);
-        dd_draw_bless_pix(x,y,ticker+step+2,IRGB(((int)(16*light)),((int)(16*light)),((int)(24*light))),front);
-        dd_draw_bless_pix(x,y,ticker+step+3,IRGB(((int)(12*light)),((int)(12*light)),((int)(20*light))),front);
-        dd_draw_bless_pix(x,y,ticker+step+4,IRGB(((int)(8*light)),((int)(8*light)),((int)(16*light))),front);
+    // Draw the fading trail of pixels
+    for (step = 0; step < strength * 10; step += 17) {
+        // Calculate alpha for fade-out effect
+        int alpha = 255 - (step * 0.5);
+        alpha = (alpha < 0) ? 0 : ((alpha > 255) ? 255 : alpha);
+
+        // Calculate individual color components with decreasing brightness
+        // and gradually transitioning to vibrant blue
+        for (int i = 0; i < 5; i++) {
+            int r, g, b;
+            if (i == 0) {
+                // First pixel: Light blue / teal color
+                r = 200;
+                g = 240;
+                b = 255;
+            } else {
+                // Subsequent pixels: Transition to vibrant blue
+                float factor = (float)i / 4.0f;
+                r = (int)(200 * (1 - factor) * light);
+                g = (int)((240 + (15 * i)) * (1 - factor) * light);
+                b = (int)(255 * light);
+            }
+
+            // Ensure R, G, B are within 0-255 range
+            r = (r < 0) ? 0 : ((r > 255) ? 255 : r);
+            g = (g < 0) ? 0 : ((g > 255) ? 255 : g);
+            b = (b < 0) ? 0 : ((b > 255) ? 255 : b);
+
+            // Clamp alpha to be within 0-255
+            int finalAlpha = alpha - (i * (alpha / 5.1));
+            finalAlpha = (finalAlpha < 0) ? 0 : ((finalAlpha > 255) ? 255 : finalAlpha);
+
+            dd_draw_bless_pix_alpha(x, y, ticker + step + i, IRGB(r, g, b), finalAlpha, front);
+        }
     }
 }
 

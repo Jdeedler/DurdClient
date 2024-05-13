@@ -57,8 +57,15 @@ static int indone;
 static int login_done;
 static unsigned char inbuf[MAX_INBUF];
 
+
+
 static int outused;
 static unsigned char outbuf[MAX_OUTBUF];
+
+
+float delta_time = 0;
+static clock_t last_time = 0;
+
 
 __declspec(dllexport) int act;
 __declspec(dllexport) int actx;
